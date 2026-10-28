@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<ruleset name="tool_vae">
+    <description>
+        Standard de codage Moodle applique au plugin.
+
+        scripts/ en est exclu : ce sont des outils de construction qui s'executent HORS de
+        Moodle, en ligne de commande. Le standard y exige un en-tete de fichier Moodle et un
+        controle MOODLE_INTERNAL — or ce dernier ferait mourir un script lance depuis le
+        Makefile, puisque la constante n'existe que dans une requete Moodle. L'exclusion est
+        donc un fait, pas une commodite.
+
+        Aucune autre exclusion : un standard assorti d'une liste d'exceptions finit par
+        n'etre qu'une liste d'exceptions.
+    </description>
+
+    <rule ref="moodle"/>
+
+    <exclude-pattern>scripts/*</exclude-pattern>
+    <exclude-pattern>*/amd/build/*</exclude-pattern>
+    <exclude-pattern>*/vendor/*</exclude-pattern>
+</ruleset>

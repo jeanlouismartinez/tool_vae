@@ -1,0 +1,9 @@
+# Configuration de moodle-plugin-ci.
+#
+# scripts/ en est exclu, pour la même raison que dans phpcs.xml.dist : ce sont des outils de
+# construction qui s'exécutent HORS de Moodle. Le standard y exige un en-tête de fichier Moodle et
+# un contrôle MOODLE_INTERNAL, qui ferait mourir un script lancé depuis le Makefile. La CI les
+# exécute elle-même, à l'étape « Contrôles propres au projet ».
+filter:
+  notPaths:
+    - scripts
