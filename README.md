@@ -8,7 +8,7 @@ The plugin helps to collect and to format. It **does not judge**: it says nothin
 
 ## Status
 
-- **Version 01.5.3 (Moodle 5.3)**, build number `2026102802`, maturity **alpha**.
+- **Version 01.5.3 (Moodle 5.3)**, build number `2026102803`, maturity **alpha**.
 - The release name reads "generation . Moodle branch": `01` is the first version intended for the Moodle plugins directory, `5.3` is the one Moodle branch it supports. What Moodle compares to decide on an update is the build number in `version.php`, not this label.
 - **Tested** in continuous integration on PostgreSQL and MariaDB with Moodle 5.3: 1,376 PHPUnit tests, plus coding standard, PHPDoc, plugin validation, upgrade savepoints and Behat scenarios.
 - **Never used by real learners so far.** The screen that fetches the export of France compétences from data.gouv.fr has never been run against the real site, and the import screen has never been used by a person (the automated scenarios run on invented files).

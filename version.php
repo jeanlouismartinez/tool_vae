@@ -105,7 +105,10 @@ $plugin->component = 'tool_vae';
 // 01 is the first version meant for the Moodle plugins directory, 5.3 is the one branch it supports.
 // The 0.47.1 code is unchanged; the number rises by one rank so that installed sites register the new
 // label. No schema change, no new string, no new capability.
-$plugin->version   = 2026102802;
+// Build 2026102803, same release label: the Moodle Marketplace refuses a new upload of a plugin under a build
+// number it already holds (2026102802). The package now also carries scripts/ and the Makefile, which the
+// tests read, and an English README. No code change, no schema change, no new string.
+$plugin->version   = 2026102803;
 
 // 2026100500.00 is Moodle 5.3.0, released on 5 October 2026.
 $plugin->requires  = 2026100500.00;
