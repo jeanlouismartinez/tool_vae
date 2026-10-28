@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jeanlouismartinez/moodle-tool_vae/schema/hors_activite.schema.json",
+  "$comment": "Version 0.1.0, 23 octobre 2026 (T-42, lot 3). Ecrit avec le plugin, jamais perdu : pas de reconstruction. Le fichier est facultatif dans l'archive (version_format reste 1). Declaratif et sans effet : c'est la parole du candidat sur son activite, elle n'exempte de rien (D-1, D-4).",
+  "title": "Competences que le candidat dit hors de son activite",
+  "description": "Les competences ou blocs que le candidat a dit ne pas relever de son activite. Un marqueur du candidat : il n'est pas une attestation, personne ne le signe, et il n'exempte de rien, la decision revient au jury.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "avertissement",
+    "competences"
+  ],
+  "properties": {
+    "avertissement": {
+      "description": "La phrase qui dit ce que ce fichier est : la parole du candidat, sans effet.",
+      "type": "string",
+      "maxLength": 2000
+    },
+    "competences": {
+      "description": "Une entree par competence ou bloc dit hors de l'activite, par fiche puis par rang.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fiche",
+          "rang",
+          "dit_le"
+        ],
+        "properties": {
+          "fiche": {
+            "description": "Code de la fiche de certification, comme sur une declaration.",
+            "$comment": "Comme le schema de la preuve : aucune forme imposee, que la longueur (l'import d'une fiche ne l'impose pas non plus).",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          },
+          "rang": {
+            "description": "Rang de la competence ou du bloc dans la fiche.",
+            "type": "string",
+            "pattern": "^[A-Za-z0-9]{1,8}$"
+          },
+          "intitule": {
+            "description": "Intitule publie, a titre de lecture. Facultatif ; jamais relu a l'import.",
+            "type": "string",
+            "maxLength": 1000
+          },
+          "note": {
+            "description": "La note facultative du candidat, sur une ligne. Texte libre, couvert par le rappel d'anonymisation.",
+            "type": "string",
+            "maxLength": 255
+          },
+          "dit_le": {
+            "description": "Date et heure ou le candidat l'a dit, ISO 8601, UTC.",
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    }
+  }
+}

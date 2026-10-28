@@ -1,0 +1,13 @@
+{
+  "officiel": false,
+  "avertissement": "Journal de bord reflexif du candidat, ecrit avec ce plugin. Ce n'est pas un dossier, personne ne l'atteste et personne d'autre que son auteur ne l'a lu : ce sont ses propres mots.",
+  "entrees": [
+    {
+      "numero": 1,
+      "creee_le": "2026-10-12T08:30:00Z",
+      "version": 1,
+      "enregistree_le": "2026-10-12T08:45:00Z",
+      "texte": "Une premiere note."
+    }
+  ]
+}

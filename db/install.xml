@@ -1,0 +1,445 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<XMLDB PATH="admin/tool/vae/db" VERSION="20260828" COMMENT="Metadata attached to core prior-learning evidence. Every table here extends a core entity by foreign key; none duplicates one. That is compensating measure MC-3 of DER-referentiel-001, and anti-pattern 2 of the scoping document."
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="../../../../lib/xmldb/xmldb.xsd"
+>
+  <TABLES>
+
+    <TABLE NAME="tool_vae_identity" COMMENT="Correspondence between Moodle integer identifiers and opaque ULIDs. MC-8: without it the export cannot produce objects conforming to preuve.schema.json, which rejects integer keys outright.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="itemtype" TYPE="char" LENGTH="32" NOTNULL="true" SEQUENCE="false" COMMENT="user, competency or structure"/>
+        <FIELD NAME="itemid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The Moodle identifier. Never used as a key in an exported object."/>
+        <FIELD NAME="uuid" TYPE="char" LENGTH="26" NOTNULL="true" SEQUENCE="false" COMMENT="ULID, 26 characters of Crockford base 32."/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="item" UNIQUE="true" FIELDS="itemtype, itemid" COMMENT="One ULID per item. Also what makes the concurrent-mint recovery in identity_map correct."/>
+        <INDEX NAME="uuid" UNIQUE="true" FIELDS="uuid"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="tool_vae_evidence" COMMENT="Metadata core_competency does not carry: period of practice, setting, narrative, and the version of the certification record the claim refers to.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="uuid" TYPE="char" LENGTH="26" NOTNULL="true" SEQUENCE="false" COMMENT="Identifier used in the exported dossier."/>
+        <FIELD NAME="userevidenceid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Foreign key to competency_userevidence. The core record is an anchor: it carries a generated label and an empty description, never the narrative."/>
+        <FIELD NAME="candidateid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The candidate this claim belongs to. NOT a duplicated core entity in the sense of the anti-pattern: it is this plugin's own owning relation to the user table, which every access check and every privacy query needs. Holding it means no query in the plugin has to name a core table, and it cannot drift - core offers no way to move evidence between users. A test asserts it matches the core record at creation."/>
+        <FIELD NAME="periodstart" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="periodend" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="periodend >= periodstart is enforced server side; no database can express it portably."/>
+        <FIELD NAME="settingtype" TYPE="char" LENGTH="32" NOTNULL="true" SEQUENCE="false" COMMENT="Closed enumeration."/>
+        <FIELD NAME="settingdetail" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false" COMMENT="FREE TEXT. Covered by the anonymisation reminder, exactly like the narrative. Not a safe field."/>
+        <FIELD NAME="situation" TYPE="text" NOTNULL="true" SEQUENCE="false" COMMENT="FREE TEXT. Describes what the professional did, never who it was done to."/>
+        <FIELD NAME="situationformat" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="2" SEQUENCE="false" COMMENT="FORMAT_PLAIN or FORMAT_MARKDOWN only. HTML is excluded: this text is stored outside the core PARAM_CLEANHTML cleaning and rendered on the attestation screen."/>
+        <FIELD NAME="fichecode" TYPE="char" LENGTH="32" NOTNULL="true" SEQUENCE="false" COMMENT="RNCP or RS record code."/>
+        <FIELD NAME="ficherang" TYPE="char" LENGTH="8" NOTNULL="true" SEQUENCE="false" COMMENT="Rank within the record. Not null and not empty: combined with fichecode it forms the idnumber the import matches on, and an empty rank collides every rankless competency of the same record onto one another."/>
+        <FIELD NAME="ficheupdated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Source update date AT THE TIME OF THE CLAIM. Without it a panel cannot establish which version of a framework a piece of evidence refers to."/>
+        <FIELD NAME="competencyid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="The competency this claim was made against, as the core numbers it. NOT a duplicated core entity: it is the only way this plugin can tell that the link it created has been replaced by another one. Without it the check degenerates into 'is there any link at all', and swapping C03 for C07 in tool_lp goes unreported while the dossier keeps naming C03 - measured, in adversarial review. Null on a row created before this field existed."/>
+        <FIELD NAME="corelabel" TYPE="char" LENGTH="100" NOTNULL="false" SEQUENCE="false" COMMENT="The exact label this plugin wrote on the core evidence record when the claim was made. Kept so that the dossier can tell whether the anchor was renamed elsewhere - and kept as a STORED STRING rather than rebuilt on demand, because a rebuilt label depends on the timezone it is rebuilt in: a period starting on the first of a month falls in the previous one a few hours away, and the comparison would report a divergence that never happened. Measured, not supposed. 100 characters, the length of the core column. Null on a row created before this field existed: the plugin then reports nothing rather than guessing."/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="usermodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="userevidenceid" TYPE="foreign-unique" FIELDS="userevidenceid" REFTABLE="competency_userevidence" REFFIELDS="id"/>
+        <KEY NAME="usermodified" TYPE="foreign" FIELDS="usermodified" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="candidateid" TYPE="foreign" FIELDS="candidateid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="uuid" UNIQUE="true" FIELDS="uuid"/>
+        <INDEX NAME="fiche" UNIQUE="false" FIELDS="fichecode, ficherang"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="tool_vae_attest" COMMENT="A manager's attestation. Held here rather than on the core record so that withdrawing it never destroys the candidate's evidence.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="uuid" TYPE="char" LENGTH="26" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="evidenceid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="attestantid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Nullable. Set to null on erasure, together with the three fields below."/>
+        <FIELD NAME="attestantrole" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false" COMMENT="Nulled on erasure with attestantid. In practice this names an establishment and a job title, which identifies the person as surely as their user id."/>
+        <FIELD NAME="statement" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Nulled on erasure with attestantid. In practice begins 'I, the undersigned...' and names the person in full."/>
+        <FIELD NAME="attestedat" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Nulled on erasure: a date of signature attached to a named role is still a trace of the signatory."/>
+        <FIELD NAME="withdrawnat" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="withdrawnreason" TYPE="char" LENGTH="32" NOTNULL="false" SEQUENCE="false" COMMENT="rgpd, erreur or contestation"/>
+        <FIELD NAME="withdrawreqby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="The manager who asked the signatory to withdraw this attestation. Set while the request is open, cleared when the signatory accepts (withdrawal) or refuses. Never kept as history."/>
+        <FIELD NAME="withdrawreqat" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="When the request was made. Null: no request is open."/>
+        <FIELD NAME="attestantuuid" TYPE="char" LENGTH="26" NOTNULL="false" SEQUENCE="false" COMMENT="The signatory of an attestation carried in from an archive, by the ULID the archive gives: they hold no account here, so attestantid is null. Nulled on withdrawal and erasure with the four fields above."/>
+        <FIELD NAME="importedat" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="When this attestation was carried in from an archive. Null for one given on this site. Only a site administrator withdraws an imported attestation."/>
+        <FIELD NAME="piecesread" TYPE="int" LENGTH="1" NOTNULL="false" SEQUENCE="false" COMMENT="T-13: 1 when the signatory ticked that they took note of the supporting pieces of the declaration, null when there were none or the signature was erased. A DECLARATION, not a fact: the plugin cannot know that a file was read."/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="usermodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="evidenceid" TYPE="foreign" FIELDS="evidenceid" REFTABLE="tool_vae_evidence" REFFIELDS="id"/>
+        <KEY NAME="attestantid" TYPE="foreign" FIELDS="attestantid" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="usermodified" TYPE="foreign" FIELDS="usermodified" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="uuid" UNIQUE="true" FIELDS="uuid"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="tool_vae_source" COMMENT="Provenance of an imported certification record. licence and attribution are not decorative: Licence Ouverte 2.0 requires both attribution and the source update date wherever the framework is shown.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="frameworkid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="fichecode" TYPE="char" LENGTH="32" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="fichetype" TYPE="char" LENGTH="8" NOTNULL="true" SEQUENCE="false" COMMENT="rncp or rs"/>
+        <FIELD NAME="sourceurl" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="sourceupdated" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="successorcode" TYPE="char" LENGTH="32" NOTNULL="false" SEQUENCE="false" COMMENT="The code of the imported record that replaces this one (T-30, D-14), declared by an administrator. Null: none declared. A declaration, not an action: nothing is moved because of it."/>
+        <FIELD NAME="licence" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="attribution" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="lastimport" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Written on every attempt, successful or not."/>
+        <FIELD NAME="lastimportstatus" TYPE="char" LENGTH="16" NOTNULL="false" SEQUENCE="false" COMMENT="ok, error, or deleted (the framework was deleted in the core). Without it a failed import that leaves an old date reads as a successful one."/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="usermodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="frameworkid" TYPE="foreign" FIELDS="frameworkid" REFTABLE="competency_framework" REFFIELDS="id"/>
+        <KEY NAME="usermodified" TYPE="foreign" FIELDS="usermodified" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="fichecode" UNIQUE="true" FIELDS="fichecode"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="tool_vae_obsolete" COMMENT="A competency that has left the source, or that tool_lp has altered locally. Core carries neither an obsolete nor a visible flag on a competency, hence this table. Nothing is ever deleted in cascade: orphaned evidence is still evidence.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="competencyid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="sourceid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="detectedat" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="kind" TYPE="char" LENGTH="16" NOTNULL="true" SEQUENCE="false" COMMENT="missing, renamed or moved. The last two record a local divergence introduced through tool_lp, which the plugin can detect on re-import but cannot prevent."/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="competencyid" TYPE="foreign" FIELDS="competencyid" REFTABLE="competency" REFFIELDS="id"/>
+        <KEY NAME="sourceid" TYPE="foreign" FIELDS="sourceid" REFTABLE="tool_vae_source" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="competencysource" UNIQUE="true" FIELDS="competencyid, sourceid"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="tool_vae_passage" COMMENT="Mapping from a competency of a superseded certification record to its successor. Never populated automatically: carrying evidence across records is a human decision, named and dated.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="fromcompetencyid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="tocompetencyid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="decidedby" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="decidedat" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="note" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="fromcompetencyid" TYPE="foreign" FIELDS="fromcompetencyid" REFTABLE="competency" REFFIELDS="id"/>
+        <KEY NAME="tocompetencyid" TYPE="foreign" FIELDS="tocompetencyid" REFTABLE="competency" REFFIELDS="id"/>
+        <KEY NAME="decidedby" TYPE="foreign" FIELDS="decidedby" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="fromto" UNIQUE="true" FIELDS="fromcompetencyid, tocompetencyid"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="tool_vae_ref" COMMENT="An address an administrator gives for a certification record, where the certifier publishes its rule of validation (T-41). An address and a short title, never the text of a rule, and nothing about a person.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="sourceid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="title" TYPE="char" LENGTH="60" NOTNULL="true" SEQUENCE="false" COMMENT="Short title chosen by the administrator, shown as the text of the link."/>
+        <FIELD NAME="url" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false" COMMENT="http or https only (piece_manager::validate_url)."/>
+        <FIELD NAME="checkedat" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="The day the administrator checked that the page says what the title promises. Null: not said."/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="sourceid" TYPE="foreign" FIELDS="sourceid" REFTABLE="tool_vae_source" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="sourceurl" UNIQUE="true" FIELDS="sourceid, url"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="tool_vae_scope" COMMENT="A competency a candidate says is outside their activity (T-42). Declarative and without effect: not an attestation, not an exemption, nothing is counted or reminded because of it. Removed when the candidate takes it back.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="uuid" TYPE="char" LENGTH="26" NOTNULL="true" SEQUENCE="false" COMMENT="Identifier for the export."/>
+        <FIELD NAME="candidateid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The candidate. The only author."/>
+        <FIELD NAME="fichecode" TYPE="char" LENGTH="32" NOTNULL="true" SEQUENCE="false" COMMENT="The record, as on a declaration, so that the mark survives a competency removed from the core."/>
+        <FIELD NAME="ficherang" TYPE="char" LENGTH="8" NOTNULL="true" SEQUENCE="false" COMMENT="The rank of the competency or the bloc in the record."/>
+        <FIELD NAME="note" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false" COMMENT="An optional sentence from the candidate, under the reminder of anonymisation."/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="candidateid" TYPE="foreign" FIELDS="candidateid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="uuid" UNIQUE="true" FIELDS="uuid"/>
+        <INDEX NAME="candidaterank" UNIQUE="true" FIELDS="candidateid, fichecode, ficherang"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="tool_vae_aicall" COMMENT="A call a candidate made to the reformulation aid (T-70): who and when, never the text sent nor the answer. It exists to hold the limits (a pause between two calls, a ceiling per day), which the core cannot: its limiter is a fixed hour kept in a cache. Purged within three days at the latest.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The candidate who asked."/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="userid" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="usertime" UNIQUE="false" FIELDS="userid, timecreated"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="tool_vae_referent" COMMENT="Who is the referent of a bloc of a certification record (T-23): a rule of the site, not of a candidate. It only decides which of the managers who follow a candidate is told first of a declaration. It gives and takes away no right: whoever follows a candidate may still read and attest.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="fichecode" TYPE="char" LENGTH="32" NOTNULL="true" SEQUENCE="false" COMMENT="The record, as on a declaration."/>
+        <FIELD NAME="ficherang" TYPE="char" LENGTH="8" NOTNULL="true" SEQUENCE="false" COMMENT="The rank of the bloc; empty for the whole record."/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The referent, a member of the staff."/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="createdby" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The administrator who named the referent. Set to 0 when that person is erased."/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="userid" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="blocreferent" UNIQUE="true" FIELDS="fichecode, ficherang, userid"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="tool_vae_archive" COMMENT="Register of the archives this platform issued, export and backup alike: what lets it confirm that an archive is the one it produced. The SHA-256 digests in the manifest only detect damage - whoever changes a file can rewrite its digest - so the manifest itself is vouched for here, outside the archive. A row is not the archive (MC-9): it holds no claim, only a digest.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="archiveuuid" TYPE="char" LENGTH="26" NOTNULL="true" SEQUENCE="false" COMMENT="The archive's ULID, the archive field of its manifest. A forger who changes it turns the archive into one this platform never issued: it is then reimported with a warning, never as verified."/>
+        <FIELD NAME="sha256" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false" COMMENT="SHA-256 of the exact bytes of manifeste.json as written into the archive. The manifest lists the digest of every other file, so this one digest covers the whole archive."/>
+        <FIELD NAME="candidateuuid" TYPE="char" LENGTH="26" NOTNULL="true" SEQUENCE="false" COMMENT="The candidate's ULID, as the archive names them. Not their user id: the row describes the archive, and once the candidate's identity map entry is gone the ULID points at nobody. Erasing the candidate, or deleting their account, deletes their rows."/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Who produced the archive. Set to 0 when that person is erased: the archive stays issued, the person leaves the row."/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="userid" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="archiveuuid" UNIQUE="true" FIELDS="archiveuuid"/>
+        <INDEX NAME="candidateuuid" UNIQUE="false" FIELDS="candidateuuid"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="tool_vae_draft" COMMENT="One section of a document a candidate writes, with the draft in progress (T-81). A document is a doctype for a candidate; a section is a part of it that has its own history; a repeatable section has a slot. The working text is the autosaved draft and is NOT a version: a version is only written when the candidate asks. Free text, covered by the anonymisation reminder wherever it can describe a person receiving care.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="uuid" TYPE="char" LENGTH="26" NOTNULL="true" SEQUENCE="false" COMMENT="Identifier for the export."/>
+        <FIELD NAME="candidateid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The candidate the section belongs to."/>
+        <FIELD NAME="doctype" TYPE="char" LENGTH="32" NOTNULL="true" SEQUENCE="false" COMMENT="Closed enumeration: faisabilite and validation (T-11)."/>
+        <FIELD NAME="section" TYPE="char" LENGTH="32" NOTNULL="true" SEQUENCE="false" COMMENT="Code of the section within the document."/>
+        <FIELD NAME="slot" TYPE="int" LENGTH="4" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="0 for a single section, 1..n for a repeated one."/>
+        <FIELD NAME="fichecode" TYPE="char" LENGTH="32" NOTNULL="true" SEQUENCE="false" COMMENT="The certification record the section depends on, EMPTY STRING when it does not (the dossier de faisabilite). Part of the address of a section (T-11): two records have the same section codes. No default: the core drops an empty default of a char column, so every insert writes it."/>
+        <FIELD NAME="working" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="The draft in progress. Null when nothing is in progress."/>
+        <FIELD NAME="workingat" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="When the working text was last autosaved."/>
+        <FIELD NAME="currentversion" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Number of the latest version, 0 when there is none."/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="usermodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="candidateid" TYPE="foreign" FIELDS="candidateid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="uuid" UNIQUE="true" FIELDS="uuid"/>
+        <INDEX NAME="section" UNIQUE="true" FIELDS="candidateid, doctype, fichecode, section, slot"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="tool_vae_version" COMMENT="A snapshot of a section, written when the candidate asks and never changed afterwards (T-81). A restoration is a new row. The content is a full snapshot, not a delta: a lost row damages no other.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="uuid" TYPE="char" LENGTH="26" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="draftid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The section."/>
+        <FIELD NAME="number" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="1, 2, 3 per section."/>
+        <FIELD NAME="content" TYPE="text" NOTNULL="true" SEQUENCE="false" COMMENT="FREE TEXT, or JSON for a section made of fields."/>
+        <FIELD NAME="contenthash" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false" COMMENT="SHA-256 of the content: no two identical versions in a row, and integrity."/>
+        <FIELD NAME="authorid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Who saved it. Nulled on that person's erasure."/>
+        <FIELD NAME="note" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false" COMMENT="An optional sentence from the candidate."/>
+        <FIELD NAME="restoredfrom" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Number of the version this one restores, when it does."/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="draftid" TYPE="foreign" FIELDS="draftid" REFTABLE="tool_vae_draft" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="uuid" UNIQUE="true" FIELDS="uuid"/>
+        <INDEX NAME="draftnumber" UNIQUE="true" FIELDS="draftid, number"/>
+        <INDEX NAME="authorid" UNIQUE="false" FIELDS="authorid"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="tool_vae_deposit" COMMENT="A deposit of the dossier de faisabilite (T-21): a dated, hashed snapshot of the latest saved version of every section, never changed afterwards. Not a lock: the candidate goes on writing, and a new deposit is a new row with the next number.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="uuid" TYPE="char" LENGTH="26" NOTNULL="true" SEQUENCE="false" COMMENT="Identifier for the export."/>
+        <FIELD NAME="candidateid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The candidate who deposited. The only author."/>
+        <FIELD NAME="doctype" TYPE="char" LENGTH="32" NOTNULL="true" SEQUENCE="false" COMMENT="The document deposited; faisabilite for now."/>
+        <FIELD NAME="number" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="1, 2, 3 per candidate and document."/>
+        <FIELD NAME="content" TYPE="text" NOTNULL="true" SEQUENCE="false" COMMENT="JSON snapshot: code, place, version, date and text or values of every section saved. May hold identity and status: read only behind tool/vae:identityview."/>
+        <FIELD NAME="contenthash" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false" COMMENT="SHA-256 of the snapshot."/>
+        <FIELD NAME="note" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false" COMMENT="An optional sentence from the candidate."/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="candidateid" TYPE="foreign" FIELDS="candidateid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="uuid" UNIQUE="true" FIELDS="uuid"/>
+        <INDEX NAME="candidatenumber" UNIQUE="true" FIELDS="candidateid, doctype, number"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="tool_vae_opinion" COMMENT="The opinion of a manager who follows a candidate, on one deposit (T-10, lot 5b, D-12). Free text, dated and hashed, never changed afterwards. Attached to the deposit it was written on: a later deposit has no opinion until one is written on it.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="uuid" TYPE="char" LENGTH="26" NOTNULL="true" SEQUENCE="false" COMMENT="Identifier for the export."/>
+        <FIELD NAME="depositid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The deposit the opinion is about."/>
+        <FIELD NAME="authorid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="The manager who wrote it. Nulled on that person's erasure."/>
+        <FIELD NAME="content" TYPE="text" NOTNULL="true" SEQUENCE="false" COMMENT="FREE TEXT. Never a verdict the plugin computes."/>
+        <FIELD NAME="contenthash" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false" COMMENT="SHA-256 of the content."/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="depositid" TYPE="foreign" FIELDS="depositid" REFTABLE="tool_vae_deposit" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="uuid" UNIQUE="true" FIELDS="uuid"/>
+        <INDEX NAME="authorid" UNIQUE="false" FIELDS="authorid"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="tool_vae_request" COMMENT="A request for precision a manager who follows a candidate makes on one declaration before attesting it (T-20, D-13), and the candidate's answer. Free text, dated and hashed, never changed afterwards: the question once, the answer once. Not a verdict, not a gate: attesting does not depend on it.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="uuid" TYPE="char" LENGTH="26" NOTNULL="true" SEQUENCE="false" COMMENT="Identifier for the export."/>
+        <FIELD NAME="evidenceid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The declaration the question is about."/>
+        <FIELD NAME="authorid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="The manager who asked. Nulled on that person's erasure."/>
+        <FIELD NAME="question" TYPE="text" NOTNULL="true" SEQUENCE="false" COMMENT="FREE TEXT. A question in words, never a judgement the plugin computes."/>
+        <FIELD NAME="questionhash" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false" COMMENT="SHA-256 of the question."/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="answer" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="FREE TEXT, written once by the candidate. Null while unanswered. Covered by the anonymisation reminder."/>
+        <FIELD NAME="answerhash" TYPE="char" LENGTH="64" NOTNULL="false" SEQUENCE="false" COMMENT="SHA-256 of the answer."/>
+        <FIELD NAME="timeanswered" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="evidenceid" TYPE="foreign" FIELDS="evidenceid" REFTABLE="tool_vae_evidence" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="uuid" UNIQUE="true" FIELDS="uuid"/>
+        <INDEX NAME="authorid" UNIQUE="false" FIELDS="authorid"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="tool_vae_carry" COMMENT="A declaration the candidate carried over to the record that replaces its own (T-30, lot 3, D-14). One row per carry: the old declaration stays where it was, with its attestation; the new one is an ordinary declaration, to be attested again. The decision of the administrator is copied here, because the row of tool_vae_passage can be replaced or taken back afterwards and the trace must stay.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="oldevidenceid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The declaration on the replaced record. Unique: one carry per declaration."/>
+        <FIELD NAME="newevidenceid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The declaration made on the replacing record."/>
+        <FIELD NAME="fromcompetencyid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The competency of the replaced record, as decided."/>
+        <FIELD NAME="tocompetencyid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The competency of the replacing record, as decided."/>
+        <FIELD NAME="decidedby" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="The administrator who decided the correspondence. Zero once that account is erased."/>
+        <FIELD NAME="decidedat" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="When the correspondence was decided. Zero once the decider is erased."/>
+        <FIELD NAME="note" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="FREE TEXT, the administrator's note on the correspondence. Emptied with the decider."/>
+        <FIELD NAME="carriedat" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="When the candidate carried the declaration over."/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="oldevidenceid" TYPE="foreign-unique" FIELDS="oldevidenceid" REFTABLE="tool_vae_evidence" REFFIELDS="id"/>
+        <KEY NAME="newevidenceid" TYPE="foreign-unique" FIELDS="newevidenceid" REFTABLE="tool_vae_evidence" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="decidedby" UNIQUE="false" FIELDS="decidedby"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="tool_vae_piece" COMMENT="A supporting piece a candidate attached to one declaration (T-13, D-3): a file kept in the plugin's own file area, or a link. Never changed, except by its removal, which erases the file, the title and the address and keeps the rest. The original name of a file is NEVER kept: it is a free field the reminder does not cover. A piece the plugin cannot read for names: anonymisation is the candidate's, the reading is the manager's, and the archive says so (DER-referentiel-001, amendment 4).">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="uuid" TYPE="char" LENGTH="26" NOTNULL="true" SEQUENCE="false" COMMENT="Identifier used in the exported dossier (MC-8), and the name the file is stored, served and archived under."/>
+        <FIELD NAME="evidenceid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The declaration the piece supports."/>
+        <FIELD NAME="candidateid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The candidate, as on the declaration. Kept here so that the privacy index and the file area lead to the person without a join."/>
+        <FIELD NAME="kind" TYPE="char" LENGTH="8" NOTNULL="true" SEQUENCE="false" COMMENT="file or link. Closed enumeration."/>
+        <FIELD NAME="nature" TYPE="char" LENGTH="16" NOTNULL="true" SEQUENCE="false" COMMENT="What the piece is, from a closed list (piece_manager::NATURES): the first answer to the risk that a file names a person."/>
+        <FIELD NAME="title" TYPE="char" LENGTH="60" NOTNULL="true" SEQUENCE="false" COMMENT="FREE TEXT, optional. Covered by the anonymisation reminder. Emptied when the piece is removed."/>
+        <FIELD NAME="ext" TYPE="char" LENGTH="4" NOTNULL="false" SEQUENCE="false" COMMENT="File only. The extension of the DETECTED type, never that of the name supplied."/>
+        <FIELD NAME="mimetype" TYPE="char" LENGTH="100" NOTNULL="false" SEQUENCE="false" COMMENT="File only. Detected on the content."/>
+        <FIELD NAME="filesize" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="File only, in bytes."/>
+        <FIELD NAME="sha256" TYPE="char" LENGTH="64" NOTNULL="false" SEQUENCE="false" COMMENT="File only. Computed on reception and checked against the stored file; kept when the piece is removed. A link has none: what is at an address can change."/>
+        <FIELD NAME="url" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false" COMMENT="Link only. FREE TEXT in practice (a path can carry a name): covered by the reminder. Emptied when the piece is removed."/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="usercreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timeremoved" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Null while the piece is there."/>
+        <FIELD NAME="removedby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="evidenceid" TYPE="foreign" FIELDS="evidenceid" REFTABLE="tool_vae_evidence" REFFIELDS="id"/>
+        <KEY NAME="candidateid" TYPE="foreign" FIELDS="candidateid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="uuid" UNIQUE="true" FIELDS="uuid"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="tool_vae_attest_piece" COMMENT="The supporting pieces an attestation covered (T-13, lot 2): the list the signatory was shown and signed, with the digest each file had. What lets the dossier say that a piece was added after the signature, and which signature. Emptied when the signature is erased or withdrawn: it is part of what the signature said.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="attestid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The attestation."/>
+        <FIELD NAME="pieceid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The piece."/>
+        <FIELD NAME="sha256" TYPE="char" LENGTH="64" NOTNULL="false" SEQUENCE="false" COMMENT="The digest of the file when it was signed; null for a link, which has none."/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="attestid" TYPE="foreign" FIELDS="attestid" REFTABLE="tool_vae_attest" REFFIELDS="id"/>
+        <KEY NAME="pieceid" TYPE="foreign" FIELDS="pieceid" REFTABLE="tool_vae_piece" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="attestpiece" UNIQUE="true" FIELDS="attestid, pieceid"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="tool_vae_piece_open" COMMENT="Who opened a supporting piece, and when (T-13, lot 2): the fact the attestation screen can show (&quot;2 pieces of 3 not opened&quot;). Opening is not reading, and the plugin says so. One row per person and piece; the time is that of the last opening. Erased with the person.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="pieceid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Who opened it."/>
+        <FIELD NAME="timeopened" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="pieceid" TYPE="foreign" FIELDS="pieceid" REFTABLE="tool_vae_piece" REFFIELDS="id"/>
+        <KEY NAME="userid" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="pieceuser" UNIQUE="true" FIELDS="pieceid, userid"/>
+      </INDEXES>
+    </TABLE>
+
+  </TABLES>
+</XMLDB>

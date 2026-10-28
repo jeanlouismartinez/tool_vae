@@ -1,0 +1,359 @@
+{
+  "base": "exemples/preuve-complete.json",
+  "cas": [
+    {
+      "nom": "id-entier",
+      "regle": "Une cle entiere de plateforme n'est jamais un identifiant",
+      "chemin": [
+        "id"
+      ],
+      "valeur": 42
+    },
+    {
+      "nom": "id-entier-en-chaine",
+      "regle": "Une cle entiere ecrite en chaine non plus",
+      "chemin": [
+        "id"
+      ],
+      "valeur": "42"
+    },
+    {
+      "nom": "personne-entier",
+      "regle": "Le candidat est designe par un identifiant opaque",
+      "chemin": [
+        "personne"
+      ],
+      "valeur": 7
+    },
+    {
+      "nom": "competence-uuid-v1",
+      "regle": "Seul le UUID v4 est admis, pas le v1 qui contient une adresse et une heure",
+      "chemin": [
+        "competence"
+      ],
+      "valeur": "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
+    },
+    {
+      "nom": "ulid-premier-caractere-8",
+      "regle": "Un ULID commence par 0 a 7",
+      "chemin": [
+        "id"
+      ],
+      "valeur": "81K2N8Q4W5X6Y7Z8A9B0C1D2E3"
+    },
+    {
+      "nom": "ulid-lettre-ambigue",
+      "regle": "Base 32 de Crockford : ni I, ni L, ni O, ni U",
+      "chemin": [
+        "id"
+      ],
+      "valeur": "01K2N8Q4W5X6Y7Z8A9B0C1D2EI"
+    },
+    {
+      "nom": "ulid-minuscules",
+      "regle": "Un ULID est ecrit en majuscules",
+      "chemin": [
+        "id"
+      ],
+      "valeur": "01k2n8q4w5x6y7z8a9b0c1d2e3"
+    },
+    {
+      "nom": "ulid-trop-court",
+      "regle": "Un ULID a 26 caracteres",
+      "chemin": [
+        "id"
+      ],
+      "valeur": "01K2N8Q4W5X6Y7Z8A9B0C1D2E"
+    },
+    {
+      "nom": "ulid-saut-de-ligne-final",
+      "regle": "Un ULID s'arrete a son 26e caractere : le $ de PHP sans D laisse passer un saut de ligne final, pas ajv",
+      "chemin": [
+        "id"
+      ],
+      "valeur": "01K2N8Q4W5X6Y7Z8A9B0C1D2E3\n"
+    },
+    {
+      "nom": "cle-moodle-en-propriete",
+      "regle": "L'identifiant de plateforme ne vit que dans correspondances[]",
+      "chemin": [
+        "userid"
+      ],
+      "valeur": 42
+    },
+    {
+      "nom": "sans-correspondances",
+      "regle": "Le tableau des correspondances est obligatoire, meme vide",
+      "chemin": [
+        "correspondances"
+      ],
+      "supprimer": true
+    },
+    {
+      "nom": "rang-minuscules",
+      "regle": "Rang : majuscules et chiffres",
+      "chemin": [
+        "fiche",
+        "rang"
+      ],
+      "valeur": "c03"
+    },
+    {
+      "nom": "rang-trop-long",
+      "regle": "Rang : huit caracteres au plus",
+      "chemin": [
+        "fiche",
+        "rang"
+      ],
+      "valeur": "C01234567"
+    },
+    {
+      "nom": "code-fiche-trop-long",
+      "regle": "Code de fiche : 32 caracteres au plus",
+      "chemin": [
+        "fiche",
+        "code"
+      ],
+      "repeter": "R",
+      "fois": 33
+    },
+    {
+      "nom": "fiche-sans-mise-a-jour",
+      "regle": "Sans version de la fiche, le jury ne sait pas a quoi la preuve renvoie",
+      "chemin": [
+        "fiche",
+        "mise_a_jour"
+      ],
+      "supprimer": true
+    },
+    {
+      "nom": "cadre-hors-liste",
+      "regle": "Le cadre est pris dans une liste fermee, pour ne pas devenir un second recit",
+      "chemin": [
+        "cadre",
+        "type"
+      ],
+      "valeur": "clinique"
+    },
+    {
+      "nom": "precision-trop-longue",
+      "regle": "Precision sur le cadre : 255 caracteres au plus",
+      "chemin": [
+        "cadre",
+        "precision"
+      ],
+      "repeter": "x",
+      "fois": 256
+    },
+    {
+      "nom": "situation-vide",
+      "regle": "Le recit ne peut pas etre vide",
+      "chemin": [
+        "situation",
+        "texte"
+      ],
+      "valeur": ""
+    },
+    {
+      "nom": "format-html",
+      "regle": "HTML exclu : le recit est rendu hors du nettoyage du coeur",
+      "chemin": [
+        "situation",
+        "format"
+      ],
+      "valeur": "html"
+    },
+    {
+      "nom": "periode-date-sans-heure",
+      "regle": "Horodatage complet, pour un reimport sans perte et sans derive de fuseau",
+      "chemin": [
+        "periode",
+        "debut"
+      ],
+      "valeur": "2025-09-01"
+    },
+    {
+      "nom": "periode-inversee",
+      "regle": "La fin de la periode ne precede pas son debut (regle hors schema)",
+      "chemin": [
+        "periode",
+        "fin"
+      ],
+      "valeur": "2025-08-31T23:59:59Z"
+    },
+    {
+      "nom": "retiree-avec-attestant",
+      "regle": "Retiree : une date et un motif, rien qui designe le signataire",
+      "chemin": [
+        "attestations",
+        1,
+        "attestant"
+      ],
+      "valeur": "01K2N8Q4W5X6Y7Z8A9B0C1D2K8"
+    },
+    {
+      "nom": "retiree-avec-role",
+      "regle": "Retiree : la fonction et l'etablissement designent le signataire",
+      "chemin": [
+        "attestations",
+        1,
+        "role"
+      ],
+      "valeur": "Cadre de sante, EHPAD"
+    },
+    {
+      "nom": "retiree-avec-declaration",
+      "regle": "Retiree : le texte signe nomme le signataire",
+      "chemin": [
+        "attestations",
+        1,
+        "declaration"
+      ],
+      "valeur": "J'atteste avoir encadre le candidat."
+    },
+    {
+      "nom": "retiree-avec-date-de-signature",
+      "regle": "Retiree : la date de signature reste une trace du signataire",
+      "chemin": [
+        "attestations",
+        1,
+        "attestee_le"
+      ],
+      "valeur": "2026-07-05T14:00:00Z"
+    },
+    {
+      "nom": "retiree-avec-identifiant",
+      "regle": "Retiree : un ULID contient l'heure de la signature",
+      "chemin": [
+        "attestations",
+        1,
+        "id"
+      ],
+      "valeur": "01K2N8Q4W5X6Y7Z8A9B0C1D2J7"
+    },
+    {
+      "nom": "retiree-sans-motif",
+      "regle": "Retiree : le motif est obligatoire",
+      "chemin": [
+        "attestations",
+        1,
+        "motif"
+      ],
+      "supprimer": true
+    },
+    {
+      "nom": "retiree-motif-libre",
+      "regle": "Retiree : motif ferme, un texte libre serait un quatrieme endroit ou ecrire un nom",
+      "chemin": [
+        "attestations",
+        1,
+        "motif"
+      ],
+      "valeur": "Le cadre a quitte l'etablissement"
+    },
+    {
+      "nom": "retiree-sans-date",
+      "regle": "Retiree : la date du retrait est obligatoire",
+      "chemin": [
+        "attestations",
+        1,
+        "retiree_le"
+      ],
+      "supprimer": true
+    },
+    {
+      "nom": "en-vigueur-sans-attestant",
+      "regle": "En vigueur : le signataire est obligatoire",
+      "chemin": [
+        "attestations",
+        0,
+        "attestant"
+      ],
+      "supprimer": true
+    },
+    {
+      "nom": "en-vigueur-sans-declaration",
+      "regle": "En vigueur : le texte signe est obligatoire",
+      "chemin": [
+        "attestations",
+        0,
+        "declaration"
+      ],
+      "supprimer": true
+    },
+    {
+      "nom": "en-vigueur-avec-motif",
+      "regle": "En vigueur : pas de motif de retrait",
+      "chemin": [
+        "attestations",
+        0,
+        "motif"
+      ],
+      "valeur": "erreur"
+    },
+    {
+      "nom": "statut-inconnu",
+      "regle": "Une attestation est en vigueur ou retiree, rien d'autre",
+      "chemin": [
+        "attestations",
+        0,
+        "statut"
+      ],
+      "valeur": "suspendue"
+    },
+    {
+      "nom": "correspondance-valeur-entiere",
+      "regle": "Valeur de correspondance en chaine : un entier sur 64 bits ne survit pas a tous les lecteurs",
+      "chemin": [
+        "correspondances",
+        0,
+        "valeur"
+      ],
+      "valeur": 42
+    },
+    {
+      "nom": "correspondance-type-inconnu",
+      "regle": "Correspondance : personne, competence ou structure",
+      "chemin": [
+        "correspondances",
+        0,
+        "type"
+      ],
+      "valeur": "cours"
+    },
+    {
+      "nom": "correspondance-sans-systeme",
+      "regle": "Correspondance : le systeme qui a attribue la valeur est obligatoire",
+      "chemin": [
+        "correspondances",
+        0,
+        "systeme"
+      ],
+      "supprimer": true
+    },
+    {
+      "nom": "reportee-depuis-entier",
+      "regle": "La preuve d'origine est designee par un identifiant opaque",
+      "chemin": [
+        "reportee_depuis"
+      ],
+      "valeur": 42
+    },
+    {
+      "nom": "reportee-depuis-seul",
+      "regle": "Un report porte sa date : reportee_depuis sans reportee_le est refuse",
+      "chemin": [
+        "reportee_depuis"
+      ],
+      "valeur": "01K2N8Q4W5X6Y7Z8A9B0C1D2E3"
+    },
+    {
+      "nom": "reportee-le-seul",
+      "regle": "Un report designe sa preuve d'origine : reportee_le sans reportee_depuis est refuse",
+      "chemin": [
+        "reportee_le"
+      ],
+      "valeur": "2026-03-03T09:00:00Z"
+    }
+  ]
+}

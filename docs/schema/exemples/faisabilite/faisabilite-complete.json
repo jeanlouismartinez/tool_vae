@@ -1,0 +1,25 @@
+{
+  "rubriques": [
+    {
+      "code": "certification",
+      "emplacement": 0,
+      "version": 2,
+      "enregistree_le": "2026-10-10T08:30:00Z",
+      "texte": "Titre professionnel d'assistant de vie aux familles."
+    },
+    {
+      "code": "experiences",
+      "emplacement": 1,
+      "version": 1,
+      "enregistree_le": "2026-10-11T14:05:00Z",
+      "texte": "De 2019 a 2024, aide a domicile aupres de personnes agees.\nToilette, repas, courses."
+    },
+    {
+      "code": "experiences",
+      "emplacement": 2,
+      "version": 3,
+      "enregistree_le": "2026-10-12T09:00:00Z",
+      "texte": "Accueil de jour dans un etablissement, remplacements d'ete."
+    }
+  ]
+}

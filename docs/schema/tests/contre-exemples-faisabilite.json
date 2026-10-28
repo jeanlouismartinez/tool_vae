@@ -1,0 +1,26 @@
+{
+  "base": "exemples/faisabilite/faisabilite-complete.json",
+  "cas": [
+    {"nom": "rubriques-absentes", "regle": "La liste des rubriques est obligatoire", "chemin": ["rubriques"], "supprimer": true},
+    {"nom": "rubriques-objet", "regle": "Les rubriques forment un tableau", "chemin": ["rubriques"], "valeur": {"a": 1}},
+    {"nom": "racine-propriete-inconnue", "regle": "Aucune propriete hors schema a la racine", "chemin": ["identite"], "valeur": {}},
+    {"nom": "code-absent", "regle": "Le code de la rubrique est obligatoire", "chemin": ["rubriques", 0, "code"], "supprimer": true},
+    {"nom": "code-majuscules", "regle": "Le code est en minuscules, chiffres et tiret bas", "chemin": ["rubriques", 0, "code"], "valeur": "Objectifs"},
+    {"nom": "code-vide", "regle": "Le code n'est pas vide", "chemin": ["rubriques", 0, "code"], "valeur": ""},
+    {"nom": "code-trop-long", "regle": "Le code a 32 caracteres au plus", "chemin": ["rubriques", 0, "code"], "repeter": "a", "fois": 33},
+    {"nom": "emplacement-absent", "regle": "L'emplacement est obligatoire", "chemin": ["rubriques", 0, "emplacement"], "supprimer": true},
+    {"nom": "emplacement-chaine", "regle": "L'emplacement est un entier", "chemin": ["rubriques", 0, "emplacement"], "valeur": "0"},
+    {"nom": "emplacement-negatif", "regle": "L'emplacement n'est pas negatif", "chemin": ["rubriques", 0, "emplacement"], "valeur": -1},
+    {"nom": "emplacement-trop-haut", "regle": "L'emplacement est de 99 au plus", "chemin": ["rubriques", 0, "emplacement"], "valeur": 100},
+    {"nom": "version-absente", "regle": "Le numero de version est obligatoire", "chemin": ["rubriques", 0, "version"], "supprimer": true},
+    {"nom": "version-zero", "regle": "Une version enregistree porte un numero d'au moins 1", "chemin": ["rubriques", 0, "version"], "valeur": 0},
+    {"nom": "version-chaine", "regle": "Le numero de version est un entier", "chemin": ["rubriques", 0, "version"], "valeur": "2"},
+    {"nom": "date-absente", "regle": "La date d'enregistrement est obligatoire", "chemin": ["rubriques", 0, "enregistree_le"], "supprimer": true},
+    {"nom": "date-sans-heure", "regle": "Une date seule derive d'un jour selon le fuseau", "chemin": ["rubriques", 0, "enregistree_le"], "valeur": "2026-10-10"},
+    {"nom": "texte-absent", "regle": "Le texte est obligatoire", "chemin": ["rubriques", 0, "texte"], "supprimer": true},
+    {"nom": "texte-nombre", "regle": "Le texte est une chaine", "chemin": ["rubriques", 0, "texte"], "valeur": 12},
+    {"nom": "texte-trop-long", "regle": "Le texte a 100000 caracteres au plus", "chemin": ["rubriques", 0, "texte"], "repeter": "a", "fois": 100001},
+    {"nom": "rubrique-propriete-inconnue", "regle": "Aucune propriete hors schema dans une rubrique", "chemin": ["rubriques", 0, "brouillon"], "valeur": "en cours"},
+    {"nom": "rubriques-chaines", "regle": "Une rubrique est un objet, pas un code seul", "chemin": ["rubriques"], "valeur": ["objectifs"]}
+  ]
+}

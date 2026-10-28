@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jeanlouismartinez/moodle-tool_vae/schema/commun/identifiant.schema.json",
+  "$comment": "RECONSTRUIT le 11 octobre 2026 a partir du code (voir ../LISEZMOI.md). Nom de fichier atteste par tests/identity_map_test.php ; motif ULID repris de identity_map::ULID_PATTERN ; UUID v4 atteste par le commentaire de classes/local/identity_map.php.",
+  "title": "Identifiant opaque",
+  "description": "Identifiant interne opaque : ULID (26 caracteres, base 32 de Crockford, premier caractere 0-7) ou UUID v4. Jamais un identifiant entier de plateforme : celui-ci ne figure que dans correspondances[].",
+  "type": "string",
+  "anyOf": [
+    {
+      "title": "ULID",
+      "type": "string",
+      "pattern": "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+    },
+    {
+      "title": "UUID v4",
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    }
+  ]
+}

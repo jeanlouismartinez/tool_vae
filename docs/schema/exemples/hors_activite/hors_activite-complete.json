@@ -1,0 +1,23 @@
+{
+  "avertissement": "Ce fichier est la parole du candidat sur son activite. Il n'exempte de rien : la decision revient au jury.",
+  "competences": [
+    {
+      "fiche": "RNCP12345",
+      "rang": "BC02",
+      "intitule": "Bloc d'exemple, intitule invente",
+      "note": "Mon poste ne passe pas par la gestion d'un budget.",
+      "dit_le": "2026-10-23T09:30:00Z"
+    },
+    {
+      "fiche": "RNCP12345",
+      "rang": "C04",
+      "dit_le": "2026-10-23T09:31:12Z"
+    },
+    {
+      "fiche": "RS5555",
+      "rang": "C01",
+      "intitule": "Competence d'exemple, intitule invente",
+      "dit_le": "2026-10-24T14:00:00Z"
+    }
+  ]
+}

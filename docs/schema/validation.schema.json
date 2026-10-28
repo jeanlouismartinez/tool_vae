@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jeanlouismartinez/moodle-tool_vae/schema/validation.schema.json",
+  "$comment": "Version 0.1.0, 20 octobre 2026 (T-11, lot 2). Ecrit avec le plugin. Le fichier est facultatif dans l'archive (version_format reste 1). Ce n'est PAS le dossier de validation du certificateur : une aide a l'ecriture, que personne n'atteste. officiel vaut toujours false.",
+  "title": "Preparation du dossier de validation",
+  "description": "Les rubriques de texte de la preparation du dossier de validation d'un candidat, chacune dans sa derniere version enregistree. Jamais le brouillon en cours.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "gabarit",
+    "officiel",
+    "avertissement",
+    "rubriques"
+  ],
+  "properties": {
+    "gabarit": {
+      "description": "La trame d'aide utilisee. Une trame de certificateur aura son propre identifiant.",
+      "type": "string",
+      "enum": [
+        "par-bloc"
+      ]
+    },
+    "officiel": {
+      "description": "Toujours false : ce document n'est pas le dossier officiel du certificateur.",
+      "const": false
+    },
+    "avertissement": {
+      "description": "La phrase d'etiquetage, dans la langue du candidat : trame d'aide a l'ecriture, non attestee, a reporter dans la trame du certificateur.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "rubriques": {
+      "description": "Une entree par rubrique ecrite, par fiche, puis par bloc, puis dans l'ordre decrire, analyser, lier ; la synthese en dernier.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fiche",
+          "code",
+          "bloc",
+          "partie",
+          "version",
+          "enregistree_le",
+          "texte"
+        ],
+        "properties": {
+          "fiche": {
+            "description": "Le code de la fiche de certification, tel que le plugin le tient.",
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,32}$"
+          },
+          "code": {
+            "description": "Code de la rubrique : <rang du bloc en minuscules>_<partie>, ou _<partie> pour la fiche entiere.",
+            "type": "string",
+            "pattern": "^[a-z0-9]{0,8}_[a-z]+$",
+            "maxLength": 32
+          },
+          "bloc": {
+            "description": "Le rang du bloc, ou null pour une rubrique de la fiche entiere.",
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Z0-9]{1,8}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "partie": {
+            "description": "La partie : decrire, analyser, lier, ou la synthese de la fiche.",
+            "type": "string",
+            "enum": [
+              "decrire",
+              "analyser",
+              "lier",
+              "synthese"
+            ]
+          },
+          "version": {
+            "description": "Numero de la version enregistree sur la plateforme qui a produit l'archive.",
+            "type": "integer",
+            "minimum": 1
+          },
+          "enregistree_le": {
+            "description": "Date et heure d'enregistrement de cette version, ISO 8601, UTC.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "texte": {
+            "description": "Le texte de la rubrique, tel que le candidat l'a ecrit.",
+            "type": "string",
+            "maxLength": 100000
+          }
+        }
+      }
+    }
+  }
+}

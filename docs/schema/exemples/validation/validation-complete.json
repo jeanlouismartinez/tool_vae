@@ -1,0 +1,43 @@
+{
+  "gabarit": "par-bloc",
+  "officiel": false,
+  "avertissement": "Trame d'aide a l'ecriture proposee par ce plugin. Ce n'est pas le dossier officiel de votre certificateur : demandez sa trame a votre accompagnateur, votre texte devra y etre reporte. Personne n'atteste ce texte : les attestations ne portent que sur vos declarations.",
+  "rubriques": [
+    {
+      "fiche": "RNCP40692",
+      "code": "bc01_decrire",
+      "bloc": "BC01",
+      "partie": "decrire",
+      "version": 2,
+      "enregistree_le": "2026-10-12T09:00:00Z",
+      "texte": "Tournees de nuit en binome, role de referente du binome.\nAccompagnement aux soins d'hygiene."
+    },
+    {
+      "fiche": "RNCP40692",
+      "code": "bc01_analyser",
+      "bloc": "BC01",
+      "partie": "analyser",
+      "version": 1,
+      "enregistree_le": "2026-10-12T09:30:00Z",
+      "texte": "J'ai appris a anticiper les besoins avant l'heure des soins."
+    },
+    {
+      "fiche": "RNCP40692",
+      "code": "bc03_lier",
+      "bloc": "BC03",
+      "partie": "lier",
+      "version": 1,
+      "enregistree_le": "2026-10-13T10:00:00Z",
+      "texte": "Voir ma description du bloc 1 : la meme situation sert ici."
+    },
+    {
+      "fiche": "RNCP40692",
+      "code": "_synthese",
+      "bloc": null,
+      "partie": "synthese",
+      "version": 3,
+      "enregistree_le": "2026-10-14T16:45:00Z",
+      "texte": "Dix ans de pratique de nuit en EHPAD."
+    }
+  ]
+}

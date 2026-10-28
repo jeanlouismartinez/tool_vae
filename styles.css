@@ -1,0 +1,77 @@
+/*
+ * Styles for tool_vae.
+ *
+ * WHY THIS FILE EXISTS. The plugin emitted five class names and defined none of them: hooks
+ * with nothing behind them, in a plugin that has no templates either. The most important of
+ * the five carries the anonymisation reminder - the measure the whole regime 2 argument rests
+ * on. It was readable, and nothing set it apart from the rest of the form.
+ *
+ * WHAT IT DELIBERATELY DOES NOT DO. It sets no colour of its own, no font, no size in pixels.
+ * Everything here is expressed in the theme's own custom properties with a Bootstrap fallback,
+ * so that a site with a dark theme, a high-contrast theme or a larger base font gets a
+ * coherent result rather than this plugin's idea of one. Colour is never the only carrier of
+ * meaning - the reminder keeps its border AND its text, the warning keeps its icon from the
+ * core notification it is rendered as.
+ *
+ * @package    tool_vae
+ * @copyright  2026 Jean-Louis Martinez <jeanlouis@martinez.pro>
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+
+/* One claim and everything attached to it, kept together as a block. */
+.tool-vae-claim-block {
+    border-left: 3px solid var(--bs-border-color, #dee2e6);
+    padding-left: 1rem;
+}
+
+/* The fields of a claim, as a description list. */
+.tool-vae-claim dt {
+    font-weight: 600;
+}
+
+.tool-vae-claim dd {
+    margin-bottom: 0.75rem;
+}
+
+/*
+ * The narrative. Kept narrow on a wide screen: a line of eighty characters or so is read
+ * faster than one of two hundred, and this is the one field somebody reads in full.
+ * white-space preserves the paragraphs a candidate typed, which nl2br would have flattened.
+ */
+.tool-vae-situation {
+    max-width: 70ch;
+    white-space: pre-wrap;
+}
+
+/* The history of attestations, including the withdrawn ones. */
+.tool-vae-attestations {
+    margin-bottom: 1rem;
+}
+
+/*
+ * THE ANONYMISATION REMINDER. It sits against each free-text field and it may not be
+ * dismissed. The border is what makes it a distinct thing on the page rather than a line of
+ * grey text: at 400% zoom, or on a small screen, an undelimited note reads as part of the
+ * field label above it. Bootstrap's own alert classes carry the colour; this adds the weight.
+ */
+.tool-vae-anonymise {
+    border-left: 4px solid var(--bs-info, #0f6cbf);
+    margin-bottom: 0.5rem;
+    max-width: 70ch;
+}
+
+/* The short reminder against a field: the same weight, in less room (T-54). */
+.tool-vae-anonymise-short {
+    padding: 0.25rem 0.75rem;
+}
+
+/* T-81: the comparison of two versions. Never colour alone: an addition is underlined, a removal is
+   struck through, and each carries its own words for a screen reader (text_diff::html()). */
+.tool-vae-ins {
+    text-decoration: underline;
+    text-decoration-style: solid;
+    background: transparent;
+}
+.tool-vae-del {
+    text-decoration: line-through;
+}

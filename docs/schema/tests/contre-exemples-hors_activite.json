@@ -1,0 +1,23 @@
+{
+  "base": "exemples/hors_activite/hors_activite-complete.json",
+  "cas": [
+    {"nom": "avertissement-absent", "regle": "Le fichier dit ce qu'il est", "chemin": ["avertissement"], "supprimer": true},
+    {"nom": "avertissement-pas-un-texte", "regle": "La phrase est un texte", "chemin": ["avertissement"], "valeur": 5},
+    {"nom": "competences-absent", "regle": "La liste est obligatoire", "chemin": ["competences"], "supprimer": true},
+    {"nom": "competences-pas-un-tableau", "regle": "La liste est un tableau", "chemin": ["competences"], "valeur": "x"},
+    {"nom": "propriete-inconnue-au-sommet", "regle": "Aucune propriete inconnue", "chemin": ["commentaire"], "valeur": "x"},
+    {"nom": "propriete-inconnue-dans-une-entree", "regle": "Aucune propriete inconnue", "chemin": ["competences", 0, "avis"], "valeur": "x"},
+    {"nom": "effet-ajoute", "regle": "Un marqueur n'a aucun effet : pas de champ qui en porterait un", "chemin": ["competences", 0, "dispense"], "valeur": true},
+    {"nom": "fiche-absente", "regle": "La fiche est obligatoire", "chemin": ["competences", 0, "fiche"], "supprimer": true},
+    {"nom": "fiche-trop-longue", "regle": "32 caracteres au plus", "chemin": ["competences", 0, "fiche"], "repeter": "A", "fois": 33},
+    {"nom": "fiche-vide", "regle": "Un code de fiche d'au moins un caractere", "chemin": ["competences", 0, "fiche"], "valeur": ""},
+    {"nom": "rang-absent", "regle": "Le rang est obligatoire", "chemin": ["competences", 0, "rang"], "supprimer": true},
+    {"nom": "rang-trop-long", "regle": "8 caracteres au plus", "chemin": ["competences", 0, "rang"], "valeur": "BC0000001"},
+    {"nom": "rang-avec-tiret", "regle": "Lettres et chiffres seulement", "chemin": ["competences", 0, "rang"], "valeur": "BC-01"},
+    {"nom": "note-trop-longue", "regle": "255 caracteres au plus", "chemin": ["competences", 0, "note"], "repeter": "a", "fois": 256},
+    {"nom": "note-pas-un-texte", "regle": "La note est un texte", "chemin": ["competences", 0, "note"], "valeur": 5},
+    {"nom": "intitule-trop-long", "regle": "1000 caracteres au plus", "chemin": ["competences", 0, "intitule"], "repeter": "a", "fois": 1001},
+    {"nom": "date-absente", "regle": "La date est obligatoire", "chemin": ["competences", 0, "dit_le"], "supprimer": true},
+    {"nom": "date-sans-heure", "regle": "Une date-heure complete", "chemin": ["competences", 0, "dit_le"], "valeur": "2026-10-23"}
+  ]
+}

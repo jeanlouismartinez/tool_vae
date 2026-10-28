@@ -1,0 +1,38 @@
+{
+  "officiel": false,
+  "avertissement": "Pieces justificatives jointes aux declarations de ce dossier. La plateforme ne peut pas verifier qu'une piece ne nomme personne ; l'empreinte d'un lien n'existe pas, ce qui est a une adresse peut changer.",
+  "pieces": [
+    {
+      "id": "01M5FVR655QWDEYXQSH0698Y91",
+      "preuve": "01M5FNB284CN9XS59Q5C5B7W8P",
+      "genre": "fichier",
+      "nature": "contract",
+      "intitule": "Contrat de travail",
+      "ajoutee_le": "2026-10-12T09:15:00Z",
+      "type": "application/pdf",
+      "taille": 74,
+      "sha256": "fe7b6c2c342f32bb3c14cc83d73a1b1f566ed50c650c692f6128a5f486eaa919",
+      "fichier": "pieces/01M5FVR655QWDEYXQSH0698Y91.pdf",
+      "couverte_par": "01M5FNENGQZARC4HDTSFF704QR"
+    },
+    {
+      "id": "01M5FVRQ1A3SCZ0HH9G9EVN9RZ",
+      "preuve": "01M5FNB284CN9XS59Q5C5B7W8P",
+      "genre": "lien",
+      "nature": "diploma",
+      "ajoutee_le": "2026-10-20T14:00:00Z",
+      "adresse": "https://exemple.test/diplome/1"
+    },
+    {
+      "id": "01M5FVS7278BPYR1YZRMCM53JW",
+      "preuve": "01M5FNB284CN9XS59Q5C5B7W8P",
+      "genre": "fichier",
+      "nature": "other",
+      "ajoutee_le": "2026-10-13T10:00:00Z",
+      "retiree_le": "2026-10-14T08:30:00Z",
+      "type": "image/jpeg",
+      "taille": 120044,
+      "sha256": "3f2a9c1e7b4d6a8f0e5c2b1d9a7f4e3c6b8a0d2f1e5c7b9a3d4f6e8c0b2a1d5f"
+    }
+  ]
+}

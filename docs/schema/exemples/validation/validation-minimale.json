@@ -1,0 +1,16 @@
+{
+  "gabarit": "par-bloc",
+  "officiel": false,
+  "avertissement": "Trame d'aide a l'ecriture proposee par ce plugin. Ce n'est pas le dossier officiel de votre certificateur : demandez sa trame a votre accompagnateur, votre texte devra y etre reporte. Personne n'atteste ce texte : les attestations ne portent que sur vos declarations.",
+  "rubriques": [
+    {
+      "fiche": "RS5678",
+      "code": "_decrire",
+      "bloc": null,
+      "partie": "decrire",
+      "version": 1,
+      "enregistree_le": "2026-10-12T09:00:00Z",
+      "texte": "Aide a la preparation du repas."
+    }
+  ]
+}

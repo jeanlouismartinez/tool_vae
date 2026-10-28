@@ -1,0 +1,192 @@
+{
+  "base": "exemples/reflexion/reflexion-complete.json",
+  "cas": [
+    {
+      "nom": "officiel-vrai",
+      "regle": "Ce n'est jamais un dossier",
+      "chemin": [
+        "officiel"
+      ],
+      "valeur": true
+    },
+    {
+      "nom": "officiel-absent",
+      "regle": "Le fichier dit ce qu'il est",
+      "chemin": [
+        "officiel"
+      ],
+      "supprimer": true
+    },
+    {
+      "nom": "avertissement-vide",
+      "regle": "La phrase est obligatoire et non vide",
+      "chemin": [
+        "avertissement"
+      ],
+      "valeur": ""
+    },
+    {
+      "nom": "avertissement-absent",
+      "regle": "La phrase est obligatoire",
+      "chemin": [
+        "avertissement"
+      ],
+      "supprimer": true
+    },
+    {
+      "nom": "entrees-objet",
+      "regle": "Les entrees sont une liste",
+      "chemin": [
+        "entrees"
+      ],
+      "valeur": {}
+    },
+    {
+      "nom": "entrees-absentes",
+      "regle": "La liste est obligatoire",
+      "chemin": [
+        "entrees"
+      ],
+      "supprimer": true
+    },
+    {
+      "nom": "champ-en-trop-racine",
+      "regle": "Aucun champ hors du schema",
+      "chemin": [
+        "fiche"
+      ],
+      "valeur": "RS5678"
+    },
+    {
+      "nom": "numero-zero",
+      "regle": "Les numeros vont de 1 a 200",
+      "chemin": [
+        "entrees",
+        0,
+        "numero"
+      ],
+      "valeur": 0
+    },
+    {
+      "nom": "numero-201",
+      "regle": "Les numeros vont de 1 a 200",
+      "chemin": [
+        "entrees",
+        0,
+        "numero"
+      ],
+      "valeur": 201
+    },
+    {
+      "nom": "numero-texte",
+      "regle": "Un numero est un entier",
+      "chemin": [
+        "entrees",
+        0,
+        "numero"
+      ],
+      "valeur": "1"
+    },
+    {
+      "nom": "numero-decimal",
+      "regle": "Un numero est un entier",
+      "chemin": [
+        "entrees",
+        0,
+        "numero"
+      ],
+      "valeur": 1.5
+    },
+    {
+      "nom": "version-zero",
+      "regle": "Une version enregistree commence a 1",
+      "chemin": [
+        "entrees",
+        0,
+        "version"
+      ],
+      "valeur": 0
+    },
+    {
+      "nom": "creee-sans-heure",
+      "regle": "Une date est un date-time",
+      "chemin": [
+        "entrees",
+        0,
+        "creee_le"
+      ],
+      "valeur": "2026-10-12"
+    },
+    {
+      "nom": "enregistree-sans-fuseau",
+      "regle": "Une date est un date-time",
+      "chemin": [
+        "entrees",
+        0,
+        "enregistree_le"
+      ],
+      "valeur": "2026-10-12T08:45:00"
+    },
+    {
+      "nom": "texte-nombre",
+      "regle": "Le texte est une chaine",
+      "chemin": [
+        "entrees",
+        0,
+        "texte"
+      ],
+      "valeur": 12
+    },
+    {
+      "nom": "champ-en-trop-entree",
+      "regle": "Aucun champ hors du schema",
+      "chemin": [
+        "entrees",
+        0,
+        "fiche"
+      ],
+      "valeur": "RS5678"
+    },
+    {
+      "nom": "texte-absent",
+      "regle": "Le texte est obligatoire",
+      "chemin": [
+        "entrees",
+        0,
+        "texte"
+      ],
+      "supprimer": true
+    },
+    {
+      "nom": "version-absente",
+      "regle": "La version est obligatoire",
+      "chemin": [
+        "entrees",
+        0,
+        "version"
+      ],
+      "supprimer": true
+    },
+    {
+      "nom": "creee-absente",
+      "regle": "La date de creation est obligatoire",
+      "chemin": [
+        "entrees",
+        0,
+        "creee_le"
+      ],
+      "supprimer": true
+    },
+    {
+      "nom": "texte-trop-long",
+      "regle": "Un texte ne depasse pas 100000 caracteres",
+      "chemin": [
+        "entrees",
+        0,
+        "texte"
+      ],
+      "repeter": "a",
+      "fois": 100001
+    }
+  ]
+}

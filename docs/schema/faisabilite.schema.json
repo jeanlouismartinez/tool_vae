@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jeanlouismartinez/moodle-tool_vae/schema/faisabilite.schema.json",
+  "$comment": "Version 0.1.0, 15 octobre 2026 (T-10, lot 4b). Ecrit avec le plugin, jamais perdu : pas de reconstruction. Le fichier est facultatif dans l'archive (version_format reste 1). Les rubriques d'identite, de statut et de coordonnees n'y figurent jamais (MC-13) ; que le schema ne le dise pas ne suffit pas, l'importeur refuse un code qui n'est pas une rubrique de texte du catalogue.",
+  "title": "Rubriques de texte du dossier de faisabilite",
+  "description": "Les rubriques de texte du dossier de faisabilite d'un candidat, chacune dans sa derniere version enregistree. Jamais le brouillon en cours, jamais l'identite, le statut ni les coordonnees.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "rubriques"
+  ],
+  "properties": {
+    "rubriques": {
+      "description": "Une entree par rubrique ecrite, dans l'ordre du formulaire puis par emplacement.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "emplacement",
+          "version",
+          "enregistree_le",
+          "texte"
+        ],
+        "properties": {
+          "code": {
+            "description": "Code de la rubrique dans le catalogue du plugin (par exemple objectifs, experiences).",
+            "type": "string",
+            "pattern": "^[a-z0-9_]{1,32}$"
+          },
+          "emplacement": {
+            "description": "0 pour une rubrique ecrite une fois ; de 1 au maximum de la rubrique pour une rubrique repetee.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 99
+          },
+          "version": {
+            "description": "Numero de la version enregistree sur la plateforme qui a produit l'archive.",
+            "type": "integer",
+            "minimum": 1
+          },
+          "enregistree_le": {
+            "description": "Date et heure d'enregistrement de cette version, ISO 8601, UTC.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "texte": {
+            "description": "Le texte de la rubrique, tel que le candidat l'a ecrit.",
+            "type": "string",
+            "maxLength": 100000
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jeanlouismartinez/moodle-tool_vae/schema/reflexion.schema.json",
+  "$comment": "Version 0.1.0, 21 octobre 2026 (T-14, lot 2). Ecrit avec le plugin. Le fichier est facultatif dans l'archive (version_format reste 1) et n'y entre QUE lorsque le candidat exporte lui-meme : jamais dans une sauvegarde faite par un tiers. Ce n'est ni un dossier ni une declaration : le journal personnel de son auteur. officiel vaut toujours false.",
+  "title": "Journal de bord reflexif",
+  "description": "Les entrees du journal de bord d'un candidat, chacune dans sa derniere version enregistree. Jamais le brouillon en cours.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "officiel",
+    "avertissement",
+    "entrees"
+  ],
+  "properties": {
+    "officiel": {
+      "description": "Toujours false : ce document n'est pas un dossier.",
+      "const": false
+    },
+    "avertissement": {
+      "description": "La phrase qui dit ce qu'est ce fichier, dans la langue du candidat.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "entrees": {
+      "description": "Une entree par numero, dans l'ordre des numeros.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "numero",
+          "creee_le",
+          "version",
+          "enregistree_le",
+          "texte"
+        ],
+        "properties": {
+          "numero": {
+            "description": "Le numero de l'entree dans le journal, de 1 a 200.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200
+          },
+          "creee_le": {
+            "description": "Date et heure de la premiere ouverture de l'entree, ISO 8601, UTC.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "description": "Numero de la version enregistree sur la plateforme qui a produit l'archive.",
+            "type": "integer",
+            "minimum": 1
+          },
+          "enregistree_le": {
+            "description": "Date et heure d'enregistrement de cette version, ISO 8601, UTC.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "texte": {
+            "description": "Le texte de l'entree, tel que le candidat l'a ecrit.",
+            "type": "string",
+            "maxLength": 100000
+          }
+        }
+      }
+    }
+  }
+}

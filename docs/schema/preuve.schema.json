@@ -1,0 +1,290 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jeanlouismartinez/moodle-tool_vae/schema/preuve.schema.json",
+  "$comment": "Version 0.1.0-reconstruit, 11 octobre 2026. L'original est perdu ; cette version est reconstruite a partir de ce que le code en savait. Chaque champ dit sa source : CODE (nom ou regle cites par le code), DEDUIT (regle du code, nom choisi ici), INVENTE (choix de la reconstruction). Detail : LISEZMOI.md.",
+  "title": "Preuve d'experience",
+  "description": "Une activite declaree par un candidat a la VAE contre une competence d'une fiche RNCP ou RS, avec ses attestations. Autoportante : se lit sans la plateforme qui l'a produite.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "personne",
+    "competence",
+    "fiche",
+    "periode",
+    "cadre",
+    "situation",
+    "declaree_le",
+    "attestations",
+    "correspondances"
+  ],
+  "properties": {
+    "id": {
+      "$comment": "CODE (identity_map.php).",
+      "description": "Identifiant de la preuve.",
+      "$ref": "commun/identifiant.schema.json"
+    },
+    "personne": {
+      "$comment": "CODE (identity_map.php).",
+      "description": "Le candidat, sujet de la preuve.",
+      "$ref": "commun/identifiant.schema.json"
+    },
+    "competence": {
+      "$comment": "CODE (identity_map.php).",
+      "description": "La competence visee.",
+      "$ref": "commun/identifiant.schema.json"
+    },
+    "structure": {
+      "$comment": "CODE (identity_map.php). Facultatif : le plugin n'enregistre pas encore de structure.",
+      "description": "L'organisation ou l'activite a ete exercee.",
+      "$ref": "commun/identifiant.schema.json"
+    },
+    "fiche": {
+      "$comment": "DEDUIT (install.xml : fichecode, ficherang, ficheupdated).",
+      "description": "La fiche de certification, et la version de celle-ci a laquelle la preuve se rapporte.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "rang",
+        "mise_a_jour"
+      ],
+      "properties": {
+        "code": {
+          "description": "Code de la fiche, par exemple RNCP36832 ou RS5678.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
+        },
+        "rang": {
+          "$comment": "CODE (importer::RANK_PATTERN, cite comme le rang du schema pivot).",
+          "description": "Rang de la competence dans la fiche.",
+          "type": "string",
+          "pattern": "^[A-Z0-9]{1,8}$"
+        },
+        "mise_a_jour": {
+          "description": "Date de mise a jour de la fiche source AU MOMENT DE LA DECLARATION. Sans elle, un jury ne peut pas savoir a quelle version du referentiel la preuve renvoie.",
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "periode": {
+      "$comment": "DEDUIT (install.xml : periodstart, periodend). Regle hors schema, verifiee par scripts/verifier-schema.mjs : fin >= debut.",
+      "description": "Periode d'exercice de l'activite.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "debut",
+        "fin"
+      ],
+      "properties": {
+        "debut": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "fin": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "cadre": {
+      "$comment": "DEDUIT (evidence_manager::SETTINGS, liste PROVISOIRE, point ouvert PO-3).",
+      "description": "Cadre d'intervention.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "ehpad",
+            "ssiad",
+            "saad",
+            "esat",
+            "domicile",
+            "hopital",
+            "foyer",
+            "autre"
+          ]
+        },
+        "precision": {
+          "description": "TEXTE LIBRE, couvert par le rappel d'anonymisation comme le recit.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        }
+      }
+    },
+    "situation": {
+      "$comment": "DEDUIT (install.xml : situation, situationformat ; evidence_manager::FORMATS). HTML exclu.",
+      "description": "Le recit : ce que le professionnel a fait, jamais a qui. TEXTE LIBRE.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "texte",
+        "format"
+      ],
+      "properties": {
+        "texte": {
+          "type": "string",
+          "minLength": 1
+        },
+        "format": {
+          "type": "string",
+          "enum": [
+            "texte",
+            "markdown"
+          ]
+        }
+      }
+    },
+    "declaree_le": {
+      "$comment": "INVENTE (nom). Source : timecreated.",
+      "description": "Horodatage de la declaration.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "reportee_depuis": {
+      "$comment": "INVENTE (nom), T-30 lot 3. Facultatif, et toujours avec reportee_le : cette preuve est la copie, faite par le candidat, d'une autre preuve de la meme archive sur la fiche qui remplace la sienne. Ni qui a decide la correspondance, ni sa note : ils restent sur la plateforme d'origine.",
+      "description": "Identifiant de la preuve dont celle-ci est reportee.",
+      "$ref": "commun/identifiant.schema.json"
+    },
+    "reportee_le": {
+      "$comment": "INVENTE (nom), T-30 lot 3. Facultatif, et toujours avec reportee_depuis.",
+      "description": "Horodatage du report.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "attestations": {
+      "description": "Attestations, en vigueur ou retirees. Peut etre vide.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/attestation"
+      }
+    },
+    "correspondances": {
+      "$comment": "CODE (nom : identity_map.php). Forme des elements INVENTEE.",
+      "description": "Seul endroit ou figurent les identifiants de la plateforme d'origine. Changer de plateforme ne touche que ce tableau.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/correspondance"
+      }
+    }
+  },
+  "$defs": {
+    "attestation": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/attestation_en_vigueur"
+        },
+        {
+          "$ref": "#/$defs/attestation_retiree"
+        }
+      ]
+    },
+    "attestation_en_vigueur": {
+      "$comment": "DEDUIT (install.xml : tool_vae_attest). Statut 'en_vigueur' INVENTE.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "statut",
+        "id",
+        "attestant",
+        "role",
+        "declaration",
+        "attestee_le"
+      ],
+      "properties": {
+        "statut": {
+          "const": "en_vigueur"
+        },
+        "id": {
+          "$ref": "commun/identifiant.schema.json"
+        },
+        "attestant": {
+          "description": "Le signataire.",
+          "$ref": "commun/identifiant.schema.json"
+        },
+        "role": {
+          "description": "Fonction et etablissement du signataire.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "declaration": {
+          "description": "Texte de l'attestation, signe.",
+          "type": "string",
+          "minLength": 1
+        },
+        "attestee_le": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "attestation_retiree": {
+      "$comment": "CODE (attestation_manager.php : une attestation 'retiree' ne porte qu'une date et un motif ; motifs fermes). Pas d'identifiant : un ULID contient l'heure de sa creation, donc de la signature, que le retrait efface.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "statut",
+        "retiree_le",
+        "motif"
+      ],
+      "properties": {
+        "statut": {
+          "const": "retiree"
+        },
+        "retiree_le": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "motif": {
+          "type": "string",
+          "enum": [
+            "rgpd",
+            "erreur",
+            "contestation"
+          ]
+        }
+      }
+    },
+    "correspondance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identifiant",
+        "type",
+        "systeme",
+        "valeur"
+      ],
+      "properties": {
+        "identifiant": {
+          "$ref": "commun/identifiant.schema.json"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "personne",
+            "competence",
+            "structure"
+          ]
+        },
+        "systeme": {
+          "description": "La plateforme qui a attribue la valeur, par exemple moodle.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{0,31}$"
+        },
+        "valeur": {
+          "description": "L'identifiant dans ce systeme, en chaine : un entier sur 64 bits ne survit pas a tous les lecteurs JSON.",
+          "type": "string",
+          "pattern": "^[1-9][0-9]{0,18}$"
+        }
+      }
+    }
+  }
+}

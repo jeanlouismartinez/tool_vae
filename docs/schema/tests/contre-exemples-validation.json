@@ -1,0 +1,186 @@
+{
+  "base": "exemples/validation/validation-complete.json",
+  "cas": [
+    {
+      "nom": "officiel-vrai",
+      "regle": "Ce n'est jamais le dossier officiel",
+      "chemin": [
+        "officiel"
+      ],
+      "valeur": true
+    },
+    {
+      "nom": "gabarit-inconnu",
+      "regle": "Une trame de certificateur aura son identifiant, pas celui-ci",
+      "chemin": [
+        "gabarit"
+      ],
+      "valeur": "dossier-validation-deas"
+    },
+    {
+      "nom": "avertissement-vide",
+      "regle": "La phrase d'etiquetage est obligatoire et non vide",
+      "chemin": [
+        "avertissement"
+      ],
+      "valeur": ""
+    },
+    {
+      "nom": "rubriques-objet",
+      "regle": "Les rubriques sont une liste",
+      "chemin": [
+        "rubriques"
+      ],
+      "valeur": {}
+    },
+    {
+      "nom": "code-majuscules",
+      "regle": "Un code de rubrique est en minuscules",
+      "chemin": [
+        "rubriques",
+        0,
+        "code"
+      ],
+      "valeur": "BC01_decrire"
+    },
+    {
+      "nom": "code-sans-tiret-bas",
+      "regle": "Un code de rubrique porte un tiret bas",
+      "chemin": [
+        "rubriques",
+        0,
+        "code"
+      ],
+      "valeur": "bc01decrire"
+    },
+    {
+      "nom": "code-rang-trop-long",
+      "regle": "Un rang a huit caracteres au plus",
+      "chemin": [
+        "rubriques",
+        0,
+        "code"
+      ],
+      "valeur": "abcdefghi_decrire"
+    },
+    {
+      "nom": "partie-inconnue",
+      "regle": "Une partie de la trame et pas une autre : pas de verdict",
+      "chemin": [
+        "rubriques",
+        0,
+        "partie"
+      ],
+      "valeur": "evaluer"
+    },
+    {
+      "nom": "bloc-minuscules",
+      "regle": "Le rang d'un bloc est en majuscules",
+      "chemin": [
+        "rubriques",
+        0,
+        "bloc"
+      ],
+      "valeur": "bc01"
+    },
+    {
+      "nom": "bloc-entier",
+      "regle": "Un rang n'est pas un entier",
+      "chemin": [
+        "rubriques",
+        0,
+        "bloc"
+      ],
+      "valeur": 1
+    },
+    {
+      "nom": "fiche-vide",
+      "regle": "Une rubrique nomme sa fiche",
+      "chemin": [
+        "rubriques",
+        0,
+        "fiche"
+      ],
+      "valeur": ""
+    },
+    {
+      "nom": "fiche-espace",
+      "regle": "Un code de fiche n'a pas d'espace",
+      "chemin": [
+        "rubriques",
+        0,
+        "fiche"
+      ],
+      "valeur": "RNCP 40692"
+    },
+    {
+      "nom": "version-zero",
+      "regle": "Une version enregistree commence a 1",
+      "chemin": [
+        "rubriques",
+        0,
+        "version"
+      ],
+      "valeur": 0
+    },
+    {
+      "nom": "date-seule",
+      "regle": "Un horodatage complet",
+      "chemin": [
+        "rubriques",
+        0,
+        "enregistree_le"
+      ],
+      "valeur": "2026-10-12"
+    },
+    {
+      "nom": "texte-nombre",
+      "regle": "Le texte est une chaine",
+      "chemin": [
+        "rubriques",
+        0,
+        "texte"
+      ],
+      "valeur": 42
+    },
+    {
+      "nom": "texte-trop-long",
+      "regle": "100 000 caracteres au plus",
+      "chemin": [
+        "rubriques",
+        0,
+        "texte"
+      ],
+      "repeter": "a",
+      "fois": 100001
+    },
+    {
+      "nom": "propriete-en-plus",
+      "regle": "Aucune propriete hors schema",
+      "chemin": [
+        "rubriques",
+        0,
+        "verdict"
+      ],
+      "valeur": "bon"
+    },
+    {
+      "nom": "rubrique-sans-texte",
+      "regle": "Le texte est obligatoire",
+      "chemin": [
+        "rubriques",
+        0,
+        "texte"
+      ],
+      "supprimer": true
+    },
+    {
+      "nom": "sans-avertissement",
+      "regle": "L'etiquetage est obligatoire",
+      "chemin": [
+        "avertissement"
+      ],
+      "supprimer": true
+    }
+  ]
+}

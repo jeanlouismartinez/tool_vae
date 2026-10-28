@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jeanlouismartinez/moodle-tool_vae/schema/pieces.schema.json",
+  "$comment": "Version 0.1.0, 22 octobre 2026 (T-13, lot 3). Ecrit avec le plugin. Le fichier est facultatif dans l'archive (version_format reste 1). Il dit qu'une piece existe, jamais ce qu'elle contient. Les octets d'un fichier (pieces/<identifiant>.<extension>) et l'adresse d'un lien n'y entrent QUE dans l'archive que le candidat exporte lui-meme et dans la sauvegarde conservee sur la plateforme : jamais dans l'export fait par un tiers. Le nom d'origine d'un fichier n'est jamais garde : aucune propriete ne lui est destinee. Un plugin anterieur a T-13 reimporte les declarations et perd les pieces sans le dire. officiel vaut toujours false.",
+  "title": "Pieces justificatives",
+  "description": "Les pieces justificatives jointes aux declarations d'un candidat : leur nature, leur type, leur empreinte, leurs dates, et la signature en vigueur qui les couvrait. Jamais un jugement sur une piece.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "officiel",
+    "avertissement",
+    "pieces"
+  ],
+  "properties": {
+    "officiel": {
+      "description": "Toujours false : ce document n'est pas un dossier.",
+      "const": false
+    },
+    "avertissement": {
+      "description": "La phrase qui dit ce qu'est ce fichier et ce que la plateforme ne peut pas verifier, dans la langue du candidat.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "pieces": {
+      "description": "Une entree par piece, retirees comprises, dans l'ordre ou elles ont ete jointes.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "preuve",
+          "genre",
+          "nature",
+          "ajoutee_le"
+        ],
+        "properties": {
+          "id": {
+            "description": "Identifiant opaque de la piece, aussi le nom sous lequel son fichier est archive.",
+            "$ref": "commun/identifiant.schema.json"
+          },
+          "preuve": {
+            "description": "Identifiant de la declaration que la piece etaye : celui d'un fichier preuves/*.json de la meme archive.",
+            "$ref": "commun/identifiant.schema.json"
+          },
+          "genre": {
+            "description": "Un fichier, ou un lien que le serveur n'a jamais visite.",
+            "enum": [
+              "fichier",
+              "lien"
+            ]
+          },
+          "nature": {
+            "description": "Ce qu'est la piece, dans une liste fermee.",
+            "enum": [
+              "payslip",
+              "contract",
+              "employer",
+              "diploma",
+              "jobdescription",
+              "other"
+            ]
+          },
+          "intitule": {
+            "description": "Texte libre facultatif, couvert par le rappel d'anonymisation. Absent d'une piece retiree et de l'export fait par un tiers : c'est un champ libre, montre a l'ecran a qui peut ouvrir la piece.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "ajoutee_le": {
+            "description": "Date et heure ou la piece a ete jointe, ISO 8601, UTC.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "retiree_le": {
+            "description": "Date et heure du retrait, si la piece a ete retiree : le fichier, l'intitule et l'adresse sont alors effaces.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "type": {
+            "description": "Type du fichier, lu sur son contenu. Fichier seulement.",
+            "enum": [
+              "application/pdf",
+              "application/vnd.oasis.opendocument.text",
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+              "image/jpeg",
+              "image/png"
+            ]
+          },
+          "taille": {
+            "description": "Taille du fichier en octets, 30 Mo au plus. Fichier seulement.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 31457280
+          },
+          "sha256": {
+            "description": "Empreinte SHA-256 du fichier, en hexadecimal minuscule, calculee a la reception. Fichier seulement. Un lien n'en a pas : ce qui est a une adresse peut changer.",
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "adresse": {
+            "description": "L'adresse d'un lien, http ou https. Absente de l'export fait par un tiers et d'une piece retiree.",
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 255,
+            "pattern": "^[Hh][Tt][Tt][Pp][Ss]?://[^\\s]+$"
+          },
+          "fichier": {
+            "description": "Le chemin du fichier dans l'archive : pieces/<identifiant de la piece>.<extension du type>. Absent de l'export fait par un tiers et d'une piece retiree.",
+            "type": "string",
+            "pattern": "^pieces/[0-7][0-9A-HJKMNP-TV-Z]{25}\\.(pdf|odt|docx|jpg|png)$"
+          },
+          "couverte_par": {
+            "description": "Identifiant de l'attestation en vigueur qui couvrait cette piece quand elle a ete signee. Absent si aucune ne la couvre : jointe apres la signature, ou pas encore attestee.",
+            "$ref": "commun/identifiant.schema.json"
+          }
+        }
+      }
+    }
+  }
+}

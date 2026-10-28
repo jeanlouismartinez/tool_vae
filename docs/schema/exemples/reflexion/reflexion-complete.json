@@ -1,0 +1,20 @@
+{
+  "officiel": false,
+  "avertissement": "Journal de bord reflexif du candidat, ecrit avec ce plugin. Ce n'est pas un dossier, personne ne l'atteste et personne d'autre que son auteur ne l'a lu : ce sont ses propres mots.",
+  "entrees": [
+    {
+      "numero": 1,
+      "creee_le": "2026-10-12T08:30:00Z",
+      "version": 2,
+      "enregistree_le": "2026-10-13T19:05:00Z",
+      "texte": "Ce matin j'ai conduit la releve pour la premiere fois. Ce que j'en retire : preparer mes transmissions la veille."
+    },
+    {
+      "numero": 3,
+      "creee_le": "2026-10-20T20:10:00Z",
+      "version": 1,
+      "enregistree_le": "2026-10-20T20:40:00Z",
+      "texte": "Je ferais autrement : demander plus tot l'avis de l'equipe."
+    }
+  ]
+}
