@@ -573,13 +573,25 @@ class competency_gateway {
      * oldest match wins: an administrator who later made a scale with the same name did not mean
      * to replace the core's.
      *
-     * A site where none matches - renamed, or deleted - is told so instead of being handed a
-     * framework on a scale nobody chose.
+     * A site where none matches - renamed, or deleted - is told so, with the names looked for and the setting where the
+     * administrator names the scale, instead of being handed a framework on a scale nobody chose. That setting
+     * (`importscaleid`) comes first: the name Moodle looks for is the one of its current translation, and a site whose
+     * scale was written under an older wording (fildargent.net, 2 November 2026: "Echelle d'évaluation de compétence par
+     * défault") never matched it. A choice that no longer points at a scale of the whole site - deleted since, or a
+     * course's own scale - is ignored, and the search by name takes over as if nothing were chosen.
      *
      * @return \stdClass The scale row.
      */
     public static function default_competence_scale(): \stdClass {
         global $CFG, $DB;
+
+        $chosen = (int) get_config('tool_vae', 'importscaleid');
+        if ($chosen) {
+            $scale = $DB->get_record('scale', ['id' => $chosen, 'courseid' => 0]);
+            if ($scale) {
+                return $scale;
+            }
+        }
 
         $strings = get_string_manager();
         $names = array_values(array_unique([
@@ -592,7 +604,8 @@ class competency_gateway {
         $scales = $DB->get_records_select('scale', "courseid = 0 AND name $insql", $params, 'id ASC', '*', 0, 1);
 
         if (!$scales) {
-            throw new \moodle_exception('errornocompetencescale', 'tool_vae');
+            $looked = implode(', ', array_map(static fn(string $name): string => '"' . $name . '"', $names));
+            throw new \moodle_exception('errornocompetencescale', 'tool_vae', '', $looked);
         }
 
         return reset($scales);

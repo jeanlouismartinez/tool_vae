@@ -111,8 +111,110 @@ final class competency_gateway_test extends \advanced_testcase {
         $DB->set_field('scale', 'name', 'Renommée', ['id' => competency_gateway::default_competence_scale()->id]);
 
         $this->expectException(\moodle_exception::class);
-        $this->expectExceptionMessage(get_string('errornocompetencescale', 'tool_vae'));
+        $this->expectExceptionMessage('cannot be found');
         (new competency_gateway())->create_framework('RS00000', 'Certification inventée');
+    }
+
+    /**
+     * Rename the core's default competence scale, then add the site scale found on fildargent.net on 2 November 2026.
+     *
+     * That site held no scale under the name Moodle looks for today: its three-level scale was named
+     * "Echelle d'évaluation de compétence par défault" (an older wording, with a typing error), so every import stopped at
+     * "the default competence scale cannot be found". Both facts are read from the real site, not invented.
+     *
+     * @return int The id of the three-level site scale.
+     */
+    private function a_site_whose_scale_has_another_name(): int {
+        global $DB;
+
+        $DB->set_field('scale', 'name', 'Renommée', ['id' => competency_gateway::default_competence_scale()->id]);
+
+        return $DB->insert_record('scale', (object) [
+            'courseid' => 0,
+            'userid' => 0,
+            'name' => 'Echelle d\'évaluation de compétence par défault',
+            'scale' => 'Non acquis,En cours d\'acquisition,Acquis',
+            'description' => '',
+            'descriptionformat' => FORMAT_HTML,
+            'timemodified' => time(),
+        ]);
+    }
+
+    /**
+     * The administrator may name the scale itself, which is the way out when the name Moodle looks for is not the site's.
+     */
+    public function test_a_chosen_scale_is_used_when_the_core_one_is_not_found_by_name(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $chosen = $this->a_site_whose_scale_has_another_name();
+
+        set_config('importscaleid', $chosen, 'tool_vae');
+
+        $this->assertEquals($chosen, competency_gateway::default_competence_scale()->id);
+
+        $id = (new competency_gateway())->create_framework('RS00000', 'Certification inventée');
+        $framework = $DB->get_record('competency_framework', ['id' => $id], '*', MUST_EXIST);
+        $this->assertEquals($chosen, $framework->scaleid);
+        $configuration = json_decode($framework->scaleconfiguration);
+        array_shift($configuration);
+        $this->assertCount(3, $configuration, 'Not one entry per item of the chosen scale.');
+        $this->assertEquals(1, end($configuration)->proficient, 'The last item is not proficient.');
+    }
+
+    /**
+     * Without a choice the site is still told so, and now told what was looked for and where to choose.
+     */
+    public function test_the_error_names_the_scales_looked_for_and_the_setting(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $this->a_site_whose_scale_has_another_name();
+
+        try {
+            competency_gateway::default_competence_scale();
+            $this->fail('A site with no scale under the core name must be refused.');
+        } catch (\moodle_exception $e) {
+            $this->assertSame('errornocompetencescale', $e->errorcode);
+            $this->assertStringContainsString('Default competence scale', $e->getMessage(), 'The name looked for is not given.');
+            $this->assertStringContainsString('Scale of imported frameworks', $e->getMessage(), 'The setting is not named.');
+        }
+    }
+
+    /**
+     * A choice whose scale was deleted since is not a reason to refuse: the core's scale, found by name, is the fallback.
+     */
+    public function test_a_chosen_scale_that_is_gone_falls_back_to_the_core_one(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $core = competency_gateway::default_competence_scale()->id;
+
+        set_config('importscaleid', 987654, 'tool_vae');
+
+        $this->assertEquals($core, competency_gateway::default_competence_scale()->id);
+    }
+
+    /**
+     * Only a scale of the site may be chosen: a course's own scale is never handed to an imported framework.
+     */
+    public function test_a_course_scale_is_never_taken_as_the_chosen_one(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $core = competency_gateway::default_competence_scale()->id;
+        $course = $this->getDataGenerator()->create_course();
+        $courseonly = $DB->insert_record('scale', (object) [
+            'courseid' => $course->id,
+            'userid' => 0,
+            'name' => 'Barème du cours',
+            'scale' => 'Non,Oui',
+            'description' => '',
+            'descriptionformat' => FORMAT_HTML,
+            'timemodified' => time(),
+        ]);
+
+        set_config('importscaleid', $courseonly, 'tool_vae');
+
+        $this->assertEquals($core, competency_gateway::default_competence_scale()->id);
     }
 
     /**

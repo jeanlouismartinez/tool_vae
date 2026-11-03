@@ -147,6 +147,23 @@ if ($hassiteconfig) {
         new lang_string('piecenoantivirus_desc', 'tool_vae'),
         0
     ));
+    // The scale given to the framework of an imported record. Automatic, it is the core's default competence scale found by
+    // its name, which a site that renamed it never matches (competency_gateway::default_competence_scale()). Only the scales
+    // of the whole site are offered: a course's own scale is never taken.
+    if ($ADMIN->fulltree) {
+        global $DB;
+        $scales = [0 => new lang_string('importscaleauto', 'tool_vae')];
+        foreach ($DB->get_records('scale', ['courseid' => 0], 'name ASC', 'id, name') as $scale) {
+            $scales[$scale->id] = format_string($scale->name);
+        }
+        $settings->add(new admin_setting_configselect(
+            'tool_vae/importscaleid',
+            new lang_string('importscale', 'tool_vae'),
+            new lang_string('importscale_desc', 'tool_vae'),
+            0,
+            $scales
+        ));
+    }
     $ADMIN->add('competencies', $settings);
 }
 
