@@ -47,9 +47,7 @@ puis **Administration du site → Notifications**.
 
 **Première installation, pas à pas, pour débutants** : [`docs/INSTALLATION-PAS-A-PAS.md`](docs/INSTALLATION-PAS-A-PAS.md) (installation, rôles et droits, cohortes, import des fiches, réglages, politique de confidentialité, répétition générale, dépannage).
 
-**Usage, de la première déclaration au livret final remis au jury** : [`docs/GUIDE-D-USAGE.md`](docs/GUIDE-D-USAGE.md) (vaeiste, responsable, direction, administrateur ; l'archive, son PDF, les copies Word, ce qu'il faut remettre ou ne pas remettre au jury).
-
-**Version 3, de la configuration au livrable pour le jury, organisée autour des deux dossiers (faisabilité, validation) et des trois acteurs** : [`docs/GUIDE-D-USAGE-V3.md`](docs/GUIDE-D-USAGE-V3.md). **Version 2, clic par clic dans Moodle 5.3 en français, qui fait quoi et dans quel ordre** : [`docs/GUIDE-D-USAGE-V2.md`](docs/GUIDE-D-USAGE-V2.md) (menus, champs et boutons relevés sur une instance en français ; 905 affirmations vérifiées par six relecteurs indépendants).
+**Usage, de la première déclaration au livret final remis au jury** : le guide d'usage (vaeiste, responsable, direction, administrateur ; l'archive, son PDF, les copies Word, ce qu'il faut remettre ou ne pas remettre au jury) est tenu à part ; il n'est pas livré avec ce dépôt.
 
 **Prérequis :** Moodle 5.3 LTS (branche `main`), PHP 8.3, et le sous-système de compétences activé (*Fonctions avancées → Activer les compétences*). Sans lui, le plugin affiche une explication et s'arrête — il alimente `core_competency`, il ne le remplace pas. Le paquet pour Moodle 4.5 LTS (branche `MOODLE_405`) n'est plus maintenu : un site en Moodle 4.5 passe à Moodle 5.3.
 
