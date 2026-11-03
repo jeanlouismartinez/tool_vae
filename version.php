@@ -108,7 +108,10 @@ $plugin->component = 'tool_vae';
 // Build 2026102803, same release label: the Moodle Marketplace refuses a new upload of a plugin under a build
 // number it already holds (2026102802). The package now also carries scripts/ and the Makefile, which the
 // tests read, and an English README. No code change, no schema change, no new string.
-$plugin->version   = 2026102803;
+// Build 2026110300, same release label: the default competence scale of imported records can now be chosen in the
+// settings (tool_vae/importscaleid), and the error names the scales looked for, so that a site whose core default
+// scale has been renamed can import records. No schema change, no new capability, no new message provider.
+$plugin->version   = 2026110300;
 
 // 2026100500.00 is Moodle 5.3.0, released on 5 October 2026.
 $plugin->requires  = 2026100500.00;
