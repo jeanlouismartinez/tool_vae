@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<role><shortname>vaeiste</shortname><name>Vaeiste</name><description>Vaeiste : prépare et dépose son propre dossier.</description><archetype>student</archetype><contextlevels><level>system</level></contextlevels><allowassign/><allowoverride/><allowswitch/><allowview/><permissions><allow>tool/vae:declare</allow><allow>tool/vae:positionself</allow><allow>tool/vae:viewown</allow><allow>tool/vae:draftown</allow><allow>tool/vae:export</allow></permissions></role>

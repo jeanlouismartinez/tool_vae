@@ -97,9 +97,11 @@ class tool_vae_generator extends component_generator_base {
     }
 
     /**
-     * One more competency in an imported record, under a bloc when `bloc` names one (T-33), through the gateway.
+     * One more competency in an imported record, under a bloc when `bloc` names one (T-33), or under a node at any depth
+     * when `parent` names one (lot 1a: a record of four levels), through the gateway.
      *
-     * @param array $data fichecode, ficherang, shortname; bloc (the rank of the bloc, optional); description (optional).
+     * @param array $data fichecode, ficherang, shortname; bloc or parent (the rank of the node it sits under, optional);
+     *        description (optional).
      */
     public function create_competency(array $data): void {
         $this->as_user((int) get_admin()->id, function () use ($data) {
@@ -107,14 +109,15 @@ class tool_vae_generator extends component_generator_base {
             $code = (string) $data['fichecode'];
             $frameworkid = (int) $gateway->find_framework($code);
             $parentid = 0;
-            if (!empty($data['bloc'])) {
+            $parentrank = (string) ($data['parent'] ?? $data['bloc'] ?? '');
+            if ($parentrank !== '') {
                 foreach ($gateway->list_framework_competencies($frameworkid) as $competency) {
-                    if ($competency->idnumber === $code . '-' . $data['bloc']) {
+                    if ($competency->idnumber === $code . '-' . $parentrank) {
                         $parentid = (int) $competency->id;
                     }
                 }
                 if ($parentid === 0) {
-                    throw new \coding_exception('The bloc ' . $data['bloc'] . ' is not a competency of the record ' . $code . '.');
+                    throw new \coding_exception('The node ' . $parentrank . ' is not a competency of the record ' . $code . '.');
                 }
             }
             $gateway->create_competency(
@@ -247,6 +250,144 @@ class tool_vae_generator extends component_generator_base {
                 'attestantrole' => $data['attestantrole'] ?? 'Care manager, Les Tilleuls residential home',
                 'statement' => $data['statement'] ?? 'I supervised this person over the period declared.',
             ]);
+        });
+    }
+
+    /**
+     * An evaluation of a competency, written by the author through the manager (T-90, lot 3).
+     *
+     * @param array $data candidateid, fichecode, ficherang, authorid and, optionally, status and reason.
+     * @return stdClass
+     */
+    public function create_evaluation(array $data): stdClass {
+        return $this->as_user((int) $data['authorid'], function () use ($data) {
+            return (new \tool_vae\local\evaluation_manager())->write(
+                (int) $data['candidateid'],
+                (string) $data['fichecode'],
+                (string) $data['ficherang'],
+                (string) ($data['status'] ?? 'inproof'),
+                (string) ($data['reason'] ?? 'Constat fait pendant l\'accompagnement.')
+            );
+        });
+    }
+
+    /**
+     * A certification of a bloc, written by the author through the manager (T-90, lot 3).
+     *
+     * @param array $data candidateid, fichecode, ficherang, authorid and, optionally, status, reason, decisiondate, alertreason,
+     *        validuntil.
+     * @return stdClass
+     */
+    public function create_certification(array $data): stdClass {
+        return $this->as_user((int) $data['authorid'], function () use ($data) {
+            return (new \tool_vae\local\certification_manager())->write(
+                (int) $data['candidateid'],
+                (string) $data['fichecode'],
+                (string) ($data['ficherang'] ?? ''),
+                (string) ($data['status'] ?? 'certified'),
+                (string) ($data['reason'] ?? 'La structure se positionne.'),
+                (string) ($data['decisiondate'] ?? \tool_vae\local\certification_manager::today()),
+                (string) ($data['alertreason'] ?? ''),
+                (string) ($data['validuntil'] ?? '')
+            );
+        });
+    }
+
+    /**
+     * A self-positioning of the vaeiste on a node of a record, written through the manager in the vaeiste's name (lot 1a).
+     *
+     * @param array $data userid (the vaeiste), fichecode, level and, optionally, ficherang ('' for the record itself),
+     *        justification, format.
+     * @return stdClass
+     */
+    public function create_selfpos(array $data): stdClass {
+        return $this->as_user((int) $data['userid'], function () use ($data) {
+            return (new \tool_vae\local\selfpos_manager())->write(
+                (int) $data['userid'],
+                (string) $data['fichecode'],
+                (string) ($data['ficherang'] ?? ''),
+                (int) $data['level'],
+                (string) ($data['justification'] ?? ''),
+                (int) ($data['format'] ?? FORMAT_PLAIN)
+            );
+        });
+    }
+
+    /**
+     * A work situation of the vaeiste, written through the manager in the vaeiste's name (lot 1b): opened, its details
+     * saved, and one version of its text when a text is given. The preparation must be open (validationopen).
+     *
+     * @param array $data userid (the vaeiste), fichecode; optionally title (sixty characters, 'Situation de travail' when
+     *        none), text (a first version), tags (ranks separated by a comma), setting, periodstart, periodend.
+     * @return stdClass The row of tool_vae_situation, with its tags.
+     */
+    public function create_situation(array $data): stdClass {
+        return $this->as_user((int) $data['userid'], function () use ($data) {
+            $manager = new \tool_vae\local\situation_manager();
+            $situation = $manager->create((int) $data['userid'], (string) $data['fichecode']);
+            $tags = array_values(array_filter(
+                array_map('trim', explode(',', (string) ($data['tags'] ?? ''))),
+                fn(string $rank) => $rank !== ''
+            ));
+            $manager->save_details(
+                (int) $situation->id,
+                (string) ($data['title'] ?? 'Situation de travail'),
+                isset($data['periodstart']) ? (int) $data['periodstart'] : null,
+                isset($data['periodend']) ? (int) $data['periodend'] : null,
+                (string) ($data['setting'] ?? ''),
+                $tags
+            );
+            if (isset($data['text']) && (string) $data['text'] !== '') {
+                $manager->save_version((int) $situation->id, (string) $data['text']);
+            }
+
+            return $manager->get((int) $situation->id);
+        });
+    }
+
+    /**
+     * A line of consent of the vaeiste to a manager who follows them, written through the manager in the vaeiste's name
+     * (lot 1b). The manager must be eligible to receive it (consent_manager::eligible()) when it is given.
+     *
+     * @param array $data userid (the vaeiste), managerid; optionally state (given, the default, or withdrawn).
+     * @return stdClass The row of tool_vae_consent.
+     */
+    public function create_consent(array $data): stdClass {
+        return $this->as_user((int) $data['userid'], function () use ($data) {
+            $manager = new \tool_vae\local\consent_manager();
+            $state = (string) ($data['state'] ?? \tool_vae\local\consent_manager::GIVEN);
+            if ($state === \tool_vae\local\consent_manager::WITHDRAWN) {
+                return $manager->withdraw((int) $data['userid'], (int) $data['managerid']);
+            }
+
+            return $manager->give((int) $data['userid'], (int) $data['managerid']);
+        });
+    }
+
+    /**
+     * An annotation of a manager on a work situation or a node of the self-positioning of a vaeiste, written through the
+     * manager in the author's name (lot 1b). The author must hold the consent, follow the vaeiste and hold annotate.
+     *
+     * @param array $data authorid, userid (the vaeiste), fichecode, text; target (situation, the default, or selfpos); slot,
+     *        REQUIRED for a situation (0 for a node); optionally ficherang ('' by default), format (FORMAT_PLAIN by default).
+     * @return stdClass The row of tool_vae_note.
+     */
+    public function create_note(array $data): stdClass {
+        $target = (string) ($data['target'] ?? \tool_vae\local\note_manager::TARGET_SITUATION);
+        if ($target === \tool_vae\local\note_manager::TARGET_SITUATION && empty($data['slot'])) {
+            throw new coding_exception('create_note: the slot of the situation is required for the target situation.');
+        }
+
+        return $this->as_user((int) $data['authorid'], function () use ($data, $target) {
+            return (new \tool_vae\local\note_manager())->write(
+                (int) $data['userid'],
+                $target,
+                (string) $data['fichecode'],
+                (int) ($data['slot'] ?? 0),
+                (string) ($data['ficherang'] ?? ''),
+                (string) $data['text'],
+                (int) ($data['format'] ?? FORMAT_PLAIN)
+            );
         });
     }
 

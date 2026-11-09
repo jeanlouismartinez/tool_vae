@@ -35,7 +35,6 @@ require_once(__DIR__ . '/../../../config.php');
 use tool_vae\local\access;
 use tool_vae\local\candidate_overview;
 use tool_vae\local\competency_gateway;
-use tool_vae\local\referent_manager;
 
 require_login();
 
@@ -71,19 +70,11 @@ if (!$candidateids) {
 // The blocs this reader is referent of (T-23): they may narrow the counts to the declarations on one of them. The choice is
 // checked against the reader's own list, so a value from the address bar names nothing they are not referent of. Narrowing
 // changes what is counted, never who is listed nor what the reader may read.
-$choices = [];
-foreach (referent_manager::for_user((int) $USER->id) as $referent) {
-    $key = $referent->fichecode . ($referent->ficherang === '' ? '' : '|' . $referent->ficherang);
-    $choices[$key] = $referent;
-}
-$chosen = optional_param('bloc', '', PARAM_RAW);
-$chosen = isset($choices[$chosen]) ? $chosen : '';
-$fichecode = '';
-$ranks = null;
-if ($chosen !== '') {
-    $fichecode = $choices[$chosen]->fichecode;
-    $ranks = referent_manager::ranks_under($fichecode, $choices[$chosen]->ficherang);
-}
+$narrowing = candidate_overview::narrowing((int) $USER->id, optional_param('bloc', '', PARAM_RAW));
+$choices = $narrowing->choices;
+$chosen = $narrowing->chosen;
+$fichecode = $narrowing->fichecode;
+$ranks = $narrowing->ranks;
 
 if ($choices) {
     $options = [get_string('candidatesfilterall', 'tool_vae')];
@@ -130,5 +121,12 @@ foreach ($users as $user) {
 }
 
 echo html_writer::table($table);
+
+// The same candidates with their records and learning plans: a link, not an action on a dossier. Not drawn in the empty
+// state above, where it would lead to a refusal.
+echo html_writer::tag('p', html_writer::link(
+    new moodle_url('/admin/tool/vae/organisation.php', ['tab' => 'followed']),
+    get_string('orgfollowedlink', 'tool_vae')
+));
 
 echo $OUTPUT->footer();

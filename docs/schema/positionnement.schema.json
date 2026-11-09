@@ -1,0 +1,190 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jeanlouismartinez/moodle-tool_vae/schema/positionnement.schema.json",
+  "$comment": "Version 0.1.0, 4 novembre 2026 (T-90, lot 3). Ecrit avec le plugin et restaure a l'import : les lignes sont ajoutees et jamais modifiees, l'historique est entier et la derniere ligne de chaque cle (fiche, rang) fait foi. Le fichier est facultatif dans l'archive (version_format reste 1). C'est le positionnement de la structure, JAMAIS la validation : seul le jury valide, hors de la plateforme.",
+  "title": "Positionnement de la structure",
+  "description": "Les evaluations de competences par le responsable qui suit le candidat et les certifications de blocs par la direction. Un positionnement de la structure, pas une validation : seul le jury valide, hors de la plateforme, et seule cette validation ouvre l'acces a la qualification du diplome officiel.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "avertissement",
+    "officiel",
+    "evaluations",
+    "certifications"
+  ],
+  "properties": {
+    "avertissement": {
+      "description": "La phrase qui dit ce que ce fichier est : le positionnement de la structure, non une validation.",
+      "type": "string",
+      "maxLength": 2000
+    },
+    "officiel": {
+      "description": "Toujours faux : rien de ce fichier n'a valeur de decision d'un jury ni de diplome.",
+      "type": "boolean",
+      "enum": [
+        false
+      ]
+    },
+    "evaluations": {
+      "description": "Toutes les lignes d'evaluation, de la plus ancienne a la plus recente. Les bornes de la liste (5 000 lignes pour l'ensemble du fichier) sont tenues par l'importeur, le validateur du plugin ne connaissant pas maxItems.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "identifiant",
+          "fiche",
+          "rang",
+          "statut",
+          "motif",
+          "empreinte",
+          "ecrit_le",
+          "fait_foi"
+        ],
+        "properties": {
+          "identifiant": {
+            "$ref": "commun/identifiant.schema.json"
+          },
+          "fiche": {
+            "description": "Code de la fiche de certification, comme sur une declaration.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          },
+          "rang": {
+            "description": "Rang de la competence dans la fiche.",
+            "type": "string",
+            "pattern": "^[A-Za-z0-9]{1,8}$"
+          },
+          "intitule": {
+            "description": "Intitule publie, a titre de lecture. Facultatif ; jamais relu a l'import.",
+            "type": "string",
+            "maxLength": 1000
+          },
+          "statut": {
+            "description": "Ou en est la competence selon la structure.",
+            "type": "string",
+            "enum": [
+              "a_construire",
+              "en_cours_de_preuve",
+              "suffisante_pour_certification",
+              "retiree"
+            ]
+          },
+          "motif": {
+            "description": "Le motif ecrit du responsable. Texte libre, couvert par le rappel d'anonymisation.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "empreinte": {
+            "description": "SHA-256 d'une forme canonique de la ligne (statut, fiche, rang, motif). Verifiee a l'import.",
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "ecrit_le": {
+            "description": "Date et heure d'ecriture, ISO 8601, UTC.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "fait_foi": {
+            "description": "Vrai pour la derniere ligne de la cle (fiche, rang) : celle qui fait foi. Un retrait qui fait foi dit qu'il n'y a plus de positionnement.",
+            "type": "boolean"
+          },
+          "auteur": {
+            "description": "L'auteur, par identifiant opaque. Absent quand il a ete efface.",
+            "$ref": "commun/identifiant.schema.json"
+          }
+        }
+      }
+    },
+    "certifications": {
+      "description": "Toutes les lignes de certification, de la plus ancienne a la plus recente.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "identifiant",
+          "fiche",
+          "rang",
+          "statut",
+          "date_decision",
+          "motif",
+          "empreinte",
+          "ecrit_le",
+          "fait_foi"
+        ],
+        "properties": {
+          "identifiant": {
+            "$ref": "commun/identifiant.schema.json"
+          },
+          "fiche": {
+            "description": "Code de la fiche de certification, comme sur une declaration.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          },
+          "rang": {
+            "description": "Rang du bloc dans la fiche ; vide pour une fiche sans bloc, qui est son propre bloc.",
+            "type": "string",
+            "pattern": "^[A-Za-z0-9]{0,8}$"
+          },
+          "intitule": {
+            "description": "Intitule publie, a titre de lecture. Facultatif ; jamais relu a l'import.",
+            "type": "string",
+            "maxLength": 1000
+          },
+          "statut": {
+            "description": "Certifie par la structure, ou retire. Jamais valide : seul le jury valide.",
+            "type": "string",
+            "enum": [
+              "certifie",
+              "retire"
+            ]
+          },
+          "date_decision": {
+            "description": "Le jour de la decision, AAAA-MM-JJ, sans fuseau.",
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+          },
+          "motif": {
+            "description": "Le motif ecrit de la direction. Texte libre.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "motif_alerte": {
+            "description": "Pourquoi le bloc a ete certifie bien qu'une competence n'en fut pas suffisante. Exige alors, absent sinon.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "valable_jusqu_au": {
+            "description": "Facultatif : le dernier jour ou la certification tient, AAAA-MM-JJ, jamais converti par un fuseau. Absent : elle n'expire pas. Jamais sur un retrait ; du jour de la decision au 2100-01-01 (tenu par l'importeur).",
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+          },
+          "empreinte": {
+            "description": "SHA-256 d'une forme canonique de la ligne (statut, fiche, rang, motif, date, motif d'alerte). Verifiee a l'import.",
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "ecrit_le": {
+            "description": "Date et heure d'ecriture, ISO 8601, UTC.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "fait_foi": {
+            "description": "Vrai pour la derniere ligne de la cle (fiche, rang) : celle qui fait foi.",
+            "type": "boolean"
+          },
+          "auteur": {
+            "description": "L'auteur, par identifiant opaque. Absent quand il a ete efface.",
+            "$ref": "commun/identifiant.schema.json"
+          }
+        }
+      }
+    }
+  }
+}

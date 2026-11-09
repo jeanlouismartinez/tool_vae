@@ -30,6 +30,8 @@ use tool_vae\local\competency_gateway;
 use tool_vae\local\document_copies;
 use tool_vae\local\exporter;
 use tool_vae\local\purge;
+use tool_vae\local\spiece_manager;
+use tool_vae\local\structure_archive;
 use tool_vae\notifier;
 
 /**
@@ -130,6 +132,15 @@ class provider implements
             'timecreated'     => 'privacy:metadata:referent:timecreated',
             'createdby'       => 'privacy:metadata:referent:createdby',
         ], 'privacy:metadata:referent');
+
+        // The authorization the direction gives a manager to produce the archive of the structure: the manager it is about and
+        // who wrote the line, added to and never changed.
+        $collection->add_database_table('tool_vae_booklet_auth', [
+            'managerid'       => 'privacy:metadata:bookletauth:managerid',
+            'grantedby'       => 'privacy:metadata:bookletauth:grantedby',
+            'status'          => 'privacy:metadata:bookletauth:status',
+            'timecreated'     => 'privacy:metadata:bookletauth:timecreated',
+        ], 'privacy:metadata:bookletauth');
 
         $collection->add_database_table('tool_vae_passage', [
             'decidedby'       => 'privacy:metadata:passage:decidedby',
@@ -257,6 +268,140 @@ class provider implements
             'contenthash'     => 'privacy:metadata:opinion:contenthash',
             'timecreated'     => 'privacy:metadata:opinion:timecreated',
         ], 'privacy:metadata:opinion');
+
+        // T-90, lot 3: the positionings of the structure - the evaluation of a competency by the manager who follows, the
+        // certification of a bloc by the direction. Free text of a third party about the candidate, added to and never changed.
+        $collection->add_database_table('tool_vae_eval', [
+            'uuid'          => 'privacy:metadata:eval:uuid',
+            'candidateid'   => 'privacy:metadata:eval:candidateid',
+            'fichecode'     => 'privacy:metadata:eval:fichecode',
+            'ficherang'     => 'privacy:metadata:eval:ficherang',
+            'status'        => 'privacy:metadata:eval:status',
+            'reason'        => 'privacy:metadata:eval:reason',
+            'reasonhash'    => 'privacy:metadata:eval:reasonhash',
+            'authorid'      => 'privacy:metadata:eval:authorid',
+            'authoruuid'    => 'privacy:metadata:eval:authoruuid',
+            'importedat'    => 'privacy:metadata:eval:importedat',
+            'timecreated'   => 'privacy:metadata:eval:timecreated',
+        ], 'privacy:metadata:eval');
+        $collection->add_database_table('tool_vae_certif', [
+            'uuid'          => 'privacy:metadata:certif:uuid',
+            'candidateid'   => 'privacy:metadata:certif:candidateid',
+            'fichecode'     => 'privacy:metadata:certif:fichecode',
+            'ficherang'     => 'privacy:metadata:certif:ficherang',
+            'status'        => 'privacy:metadata:certif:status',
+            'reason'        => 'privacy:metadata:certif:reason',
+            'reasonhash'    => 'privacy:metadata:certif:reasonhash',
+            'decisiondate'  => 'privacy:metadata:certif:decisiondate',
+            'validuntil'    => 'privacy:metadata:certif:validuntil',
+            'alertreason'   => 'privacy:metadata:certif:alertreason',
+            'authorid'      => 'privacy:metadata:certif:authorid',
+            'authoruuid'    => 'privacy:metadata:certif:authoruuid',
+            'importedat'    => 'privacy:metadata:certif:importedat',
+            'timecreated'   => 'privacy:metadata:certif:timecreated',
+        ], 'privacy:metadata:certif');
+
+        // Lot 1a: the self-positioning of the vaeiste on the nodes of their records. Their own word about themselves, added to
+        // and never changed; the vaeiste is the only author, so there is nobody else to name or to strip.
+        $collection->add_database_table('tool_vae_selfpos', [
+            'uuid'                => 'privacy:metadata:selfpos:uuid',
+            'candidateid'         => 'privacy:metadata:selfpos:candidateid',
+            'fichecode'           => 'privacy:metadata:selfpos:fichecode',
+            'ficherang'           => 'privacy:metadata:selfpos:ficherang',
+            'level'               => 'privacy:metadata:selfpos:level',
+            'levellabel'          => 'privacy:metadata:selfpos:levellabel',
+            'justification'       => 'privacy:metadata:selfpos:justification',
+            'justificationformat' => 'privacy:metadata:selfpos:justificationformat',
+            'linehash'            => 'privacy:metadata:selfpos:linehash',
+            'importedat'          => 'privacy:metadata:selfpos:importedat',
+            'timecreated'         => 'privacy:metadata:selfpos:timecreated',
+        ], 'privacy:metadata:selfpos');
+
+        // Lot 1b: the work situations of the vaeiste, their own material, with the snapshot each version takes, their tags,
+        // their supporting pieces (files in the plugin's own area, in the vaeiste's context) and the links to them. The
+        // names are spelt out for scripts/verifier-privacy.php, which reads them literally.
+        $collection->add_database_table('tool_vae_situation', [
+            'uuid'         => 'privacy:metadata:situation:uuid',
+            'candidateid'  => 'privacy:metadata:situation:candidateid',
+            'fichecode'    => 'privacy:metadata:situation:fichecode',
+            'slot'         => 'privacy:metadata:situation:slot',
+            'draftid'      => 'privacy:metadata:situation:draftid',
+            'title'        => 'privacy:metadata:situation:title',
+            'periodstart'  => 'privacy:metadata:situation:periodstart',
+            'periodend'    => 'privacy:metadata:situation:periodend',
+            'setting'      => 'privacy:metadata:situation:setting',
+            'timecreated'  => 'privacy:metadata:situation:timecreated',
+            'timemodified' => 'privacy:metadata:situation:timemodified',
+        ], 'privacy:metadata:situation');
+        $collection->add_database_table('tool_vae_sitversion', [
+            'situationid' => 'privacy:metadata:sitversion:situationid',
+            'number'      => 'privacy:metadata:sitversion:number',
+            'title'       => 'privacy:metadata:sitversion:title',
+            'periodstart' => 'privacy:metadata:sitversion:periodstart',
+            'periodend'   => 'privacy:metadata:sitversion:periodend',
+            'setting'     => 'privacy:metadata:sitversion:setting',
+            'tags'        => 'privacy:metadata:sitversion:tags',
+            'timecreated' => 'privacy:metadata:sitversion:timecreated',
+        ], 'privacy:metadata:sitversion');
+        $collection->add_database_table('tool_vae_sitetag', [
+            'situationid' => 'privacy:metadata:sitetag:situationid',
+            'candidateid' => 'privacy:metadata:sitetag:candidateid',
+            'fichecode'   => 'privacy:metadata:sitetag:fichecode',
+            'ficherang'   => 'privacy:metadata:sitetag:ficherang',
+            'timecreated' => 'privacy:metadata:sitetag:timecreated',
+        ], 'privacy:metadata:sitetag');
+        $collection->add_database_table('tool_vae_spiece', [
+            'uuid'        => 'privacy:metadata:spiece:uuid',
+            'candidateid' => 'privacy:metadata:spiece:candidateid',
+            'fichecode'   => 'privacy:metadata:spiece:fichecode',
+            'kind'        => 'privacy:metadata:spiece:kind',
+            'nature'      => 'privacy:metadata:spiece:nature',
+            'title'       => 'privacy:metadata:spiece:title',
+            'ext'         => 'privacy:metadata:spiece:ext',
+            'mimetype'    => 'privacy:metadata:spiece:mimetype',
+            'filesize'    => 'privacy:metadata:spiece:filesize',
+            'sha256'      => 'privacy:metadata:spiece:sha256',
+            'url'         => 'privacy:metadata:spiece:url',
+            'timecreated' => 'privacy:metadata:spiece:timecreated',
+            'timeremoved' => 'privacy:metadata:spiece:timeremoved',
+        ], 'privacy:metadata:spiece');
+        $collection->add_database_table('tool_vae_slink', [
+            'situationid' => 'privacy:metadata:slink:situationid',
+            'pieceid'     => 'privacy:metadata:slink:pieceid',
+            'part'        => 'privacy:metadata:slink:part',
+            'timecreated' => 'privacy:metadata:slink:timecreated',
+            'timeremoved' => 'privacy:metadata:slink:timeremoved',
+        ], 'privacy:metadata:slink');
+        // Lot 1b: two people in each row, as in an attestation - the vaeiste who consents and the manager named, the vaeiste
+        // annotated and the manager who writes. The consent is the vaeiste's own line; the annotation is the free text of a
+        // third party about them, which stays when its author is erased and loses its signature then.
+        $collection->add_database_table('tool_vae_consent', [
+            'uuid'        => 'privacy:metadata:consent:uuid',
+            'candidateid' => 'privacy:metadata:consent:candidateid',
+            'managerid'   => 'privacy:metadata:consent:managerid',
+            'manageruuid' => 'privacy:metadata:consent:manageruuid',
+            'state'       => 'privacy:metadata:consent:state',
+            'importedat'  => 'privacy:metadata:consent:importedat',
+            'timecreated' => 'privacy:metadata:consent:timecreated',
+        ], 'privacy:metadata:consent');
+        $collection->add_database_table('tool_vae_note', [
+            'uuid'        => 'privacy:metadata:note:uuid',
+            'candidateid' => 'privacy:metadata:note:candidateid',
+            'target'      => 'privacy:metadata:note:target',
+            'targetuuid'  => 'privacy:metadata:note:targetuuid',
+            'fichecode'   => 'privacy:metadata:note:fichecode',
+            'slot'        => 'privacy:metadata:note:slot',
+            'ficherang'   => 'privacy:metadata:note:ficherang',
+            'authorid'    => 'privacy:metadata:note:authorid',
+            'authoruuid'  => 'privacy:metadata:note:authoruuid',
+            'text'        => 'privacy:metadata:note:text',
+            'textformat'  => 'privacy:metadata:note:textformat',
+            'state'       => 'privacy:metadata:note:state',
+            'withdraws'   => 'privacy:metadata:note:withdraws',
+            'notehash'    => 'privacy:metadata:note:notehash',
+            'importedat'  => 'privacy:metadata:note:importedat',
+            'timecreated' => 'privacy:metadata:note:timecreated',
+        ], 'privacy:metadata:note');
 
         // T-20: the requests for precision on the declarations, and the answers.
         $collection->add_database_table('tool_vae_request', [
@@ -448,6 +593,74 @@ class provider implements
             ['userlevel' => CONTEXT_USER, 'authorid' => $userid]
         );
 
+        // Lot 1a: the vaeiste who positioned themselves, the only person a line of theirs names.
+        $contextlist->add_from_sql(
+            "SELECT ctx.id
+               FROM {context} ctx
+               JOIN {tool_vae_selfpos} sp ON sp.candidateid = ctx.instanceid
+              WHERE ctx.contextlevel = :userlevel AND sp.candidateid = :candidateid",
+            ['userlevel' => CONTEXT_USER, 'candidateid' => $userid]
+        );
+
+        // Lot 1b: the vaeiste whose work situations, pieces, annotations and consents these are (the snapshots, tags and
+        // links hang from a situation or a piece and lead to the same person).
+        foreach (['tool_vae_situation', 'tool_vae_spiece', 'tool_vae_note', 'tool_vae_consent'] as $table) {
+            $contextlist->add_from_sql(
+                "SELECT ctx.id
+                   FROM {context} ctx
+                   JOIN {{$table}} x ON x.candidateid = ctx.instanceid
+                  WHERE ctx.contextlevel = :userlevel AND x.candidateid = :candidateid",
+                ['userlevel' => CONTEXT_USER, 'candidateid' => $userid]
+            );
+        }
+        // And the manager who annotated a vaeiste, or whom a vaeiste gave consent to: by account, or by the ULID this site
+        // gave them when a restored line names them so.
+        $named = ['tool_vae_note' => ['authorid', 'authoruuid'], 'tool_vae_consent' => ['managerid', 'manageruuid']];
+        foreach ($named as $table => [$account, $ulidcolumn]) {
+            $contextlist->add_from_sql(
+                "SELECT ctx.id
+                   FROM {context} ctx
+                   JOIN {{$table}} x ON x.candidateid = ctx.instanceid
+                  WHERE ctx.contextlevel = :userlevel AND x.$account = :person",
+                ['userlevel' => CONTEXT_USER, 'person' => $userid]
+            );
+            $contextlist->add_from_sql(
+                "SELECT ctx.id
+                   FROM {context} ctx
+                   JOIN {{$table}} x ON x.candidateid = ctx.instanceid
+                   JOIN {tool_vae_identity} i ON i.uuid = x.$ulidcolumn AND i.itemtype = :type AND i.itemid = :byuser
+                  WHERE ctx.contextlevel = :userlevel",
+                ['userlevel' => CONTEXT_USER, 'type' => 'user', 'byuser' => $userid]
+            );
+        }
+
+        // T-90, lot 3: the candidate a positioning is about, and the person who wrote one on a candidate's dossier.
+        foreach (['tool_vae_eval', 'tool_vae_certif'] as $positioning) {
+            $contextlist->add_from_sql(
+                "SELECT ctx.id
+                   FROM {context} ctx
+                   JOIN {{$positioning}} x ON x.candidateid = ctx.instanceid
+                  WHERE ctx.contextlevel = :userlevel AND x.candidateid = :candidateid",
+                ['userlevel' => CONTEXT_USER, 'candidateid' => $userid]
+            );
+            $contextlist->add_from_sql(
+                "SELECT ctx.id
+                   FROM {context} ctx
+                   JOIN {{$positioning}} x ON x.candidateid = ctx.instanceid
+                  WHERE ctx.contextlevel = :userlevel AND x.authorid = :authorid",
+                ['userlevel' => CONTEXT_USER, 'authorid' => $userid]
+            );
+            // A line restored from an archive names its author by the ULID this site gave them, not by account.
+            $contextlist->add_from_sql(
+                "SELECT ctx.id
+                   FROM {context} ctx
+                   JOIN {{$positioning}} x ON x.candidateid = ctx.instanceid
+                   JOIN {tool_vae_identity} i ON i.uuid = x.authoruuid AND i.itemtype = :type AND i.itemid = :byuser
+                  WHERE ctx.contextlevel = :userlevel",
+                ['userlevel' => CONTEXT_USER, 'type' => 'user', 'byuser' => $userid]
+            );
+        }
+
         // As the manager who asked for a precision on a candidate's declaration (T-20).
         $contextlist->add_from_sql(
             "SELECT ctx.id
@@ -496,6 +709,8 @@ class provider implements
             || $DB->record_exists('tool_vae_carry', ['decidedby' => $userid])
             || $DB->record_exists('tool_vae_referent', ['userid' => $userid])
             || $DB->record_exists_select('tool_vae_referent', 'createdby = :createdby', ['createdby' => $userid])
+            || $DB->record_exists('tool_vae_booklet_auth', ['managerid' => $userid])
+            || $DB->record_exists('tool_vae_booklet_auth', ['grantedby' => $userid])
             || $DB->record_exists(exporter::REGISTER, ['userid' => $userid]);
 
         if ($hassitedata) {
@@ -619,6 +834,58 @@ class provider implements
                   WHERE p.candidateid = :userid AND o.authorid IS NOT NULL",
                 ['userid' => $context->instanceid]
             );
+            // Lot 1a: the vaeiste who positioned themselves.
+            $userlist->add_from_sql(
+                'candidateid',
+                "SELECT sp.candidateid FROM {tool_vae_selfpos} sp WHERE sp.candidateid = :userid",
+                ['userid' => $context->instanceid]
+            );
+            // Lot 1b: the vaeiste of the work situations, the pieces, the annotations and the consents; the manager who
+            // annotated or was given consent, by account or by the ULID of a restored line - see get_contexts_for_userid().
+            foreach (['tool_vae_situation', 'tool_vae_spiece', 'tool_vae_note', 'tool_vae_consent'] as $table) {
+                $userlist->add_from_sql(
+                    'candidateid',
+                    "SELECT x.candidateid FROM {{$table}} x WHERE x.candidateid = :userid",
+                    ['userid' => $context->instanceid]
+                );
+            }
+            $named = ['tool_vae_note' => ['authorid', 'authoruuid'], 'tool_vae_consent' => ['managerid', 'manageruuid']];
+            foreach ($named as $table => [$account, $ulidcolumn]) {
+                $userlist->add_from_sql(
+                    $account,
+                    "SELECT x.$account FROM {{$table}} x WHERE x.candidateid = :userid AND x.$account IS NOT NULL",
+                    ['userid' => $context->instanceid]
+                );
+                $userlist->add_from_sql(
+                    'itemid',
+                    "SELECT i.itemid
+                       FROM {{$table}} x
+                       JOIN {tool_vae_identity} i ON i.uuid = x.$ulidcolumn AND i.itemtype = :type
+                      WHERE x.candidateid = :userid",
+                    ['type' => 'user', 'userid' => $context->instanceid]
+                );
+            }
+            // T-90, lot 3: the candidate a positioning is about, and whoever wrote one on the dossier.
+            foreach (['tool_vae_eval', 'tool_vae_certif'] as $positioning) {
+                $userlist->add_from_sql(
+                    'candidateid',
+                    "SELECT x.candidateid FROM {{$positioning}} x WHERE x.candidateid = :userid",
+                    ['userid' => $context->instanceid]
+                );
+                $userlist->add_from_sql(
+                    'authorid',
+                    "SELECT x.authorid FROM {{$positioning}} x WHERE x.candidateid = :userid AND x.authorid IS NOT NULL",
+                    ['userid' => $context->instanceid]
+                );
+                $userlist->add_from_sql(
+                    'itemid',
+                    "SELECT i.itemid
+                       FROM {{$positioning}} x
+                       JOIN {tool_vae_identity} i ON i.uuid = x.authoruuid AND i.itemtype = :type
+                      WHERE x.candidateid = :userid",
+                    ['type' => 'user', 'userid' => $context->instanceid]
+                );
+            }
             $userlist->add_from_sql(
                 'authorid',
                 "SELECT q.authorid
@@ -678,6 +945,12 @@ class provider implements
             $userlist->add_from_sql(
                 'userid',
                 "SELECT a.userid FROM {tool_vae_archive} a",
+                []
+            );
+            $userlist->add_from_sql('managerid', "SELECT b.managerid FROM {tool_vae_booklet_auth} b", []);
+            $userlist->add_from_sql(
+                'grantedby',
+                "SELECT b.grantedby FROM {tool_vae_booklet_auth} b WHERE b.grantedby IS NOT NULL",
                 []
             );
         }
@@ -938,6 +1211,80 @@ class provider implements
                     );
                 }
 
+                // The positionings of the structure (T-90, lot 3): the candidate reads every line written about them; whoever
+                // wrote some, theirs alone.
+                $positionings = [];
+                $ownulid = self::ulid_of($userid);
+                foreach (['tool_vae_eval' => 'evaluations', 'tool_vae_certif' => 'certifications'] as $table => $key) {
+                    $lines = [];
+                    foreach (
+                        $DB->get_records($table, ['candidateid' => $candidateid], 'fichecode, ficherang, timecreated, id') as $line
+                    ) {
+                        $theirs = (int) $line->authorid === $userid
+                            || ($ownulid !== null && (string) $line->authoruuid === $ownulid);
+                        if ($userid !== $candidateid && !$theirs) {
+                            continue;
+                        }
+                        $lines[] = [
+                            'reference' => $line->uuid,
+                            'record'    => $line->fichecode,
+                            'rank'      => $line->ficherang,
+                            'status'    => $line->status,
+                            'reason'    => $line->reason,
+                            'sha256'    => $line->reasonhash,
+                            'decision'  => $line->decisiondate ?? null,
+                            'alert'     => $line->alertreason ?? null,
+                            'validuntil' => $line->validuntil ?? null,
+                            'written'   => \core_privacy\local\request\transform::datetime($line->timecreated),
+                        ];
+                    }
+                    if ($lines) {
+                        $positionings[$key] = $lines;
+                    }
+                }
+                if ($positionings) {
+                    writer::with_context($context)->export_data(
+                        [get_string('pluginname', 'tool_vae'), get_string('privacy:path:positionings', 'tool_vae')],
+                        (object) $positionings
+                    );
+                }
+
+                // The self-positioning of the vaeiste (lot 1a): their own word about themselves, exported to them alone. The
+                // managers who follow them read it on the screen; a privacy request of theirs is about them, not about this.
+                if ($userid === $candidateid) {
+                    $selflines = [];
+                    $rows = $DB->get_records(
+                        'tool_vae_selfpos',
+                        ['candidateid' => $candidateid],
+                        'fichecode, ficherang, timecreated, id'
+                    );
+                    foreach ($rows as $line) {
+                        $selflines[] = [
+                            'reference'     => $line->uuid,
+                            'record'        => $line->fichecode,
+                            'rank'          => $line->ficherang,
+                            'level'         => (int) $line->level,
+                            'label'         => $line->levellabel,
+                            'justification' => $line->justification,
+                            'format'        => (int) $line->justificationformat,
+                            'sha256'        => $line->linehash,
+                            'restored'      => $line->importedat === null
+                                ? null : \core_privacy\local\request\transform::datetime($line->importedat),
+                            'written'       => \core_privacy\local\request\transform::datetime($line->timecreated),
+                        ];
+                    }
+                    if ($selflines) {
+                        writer::with_context($context)->export_data(
+                            [get_string('pluginname', 'tool_vae'), get_string('privacy:path:selfpositionings', 'tool_vae')],
+                            (object) ['lines' => $selflines]
+                        );
+                    }
+                }
+
+                // The work situations, their pieces, the annotations and the consents (lot 1b): everything to the vaeiste,
+                // to anyone else what they wrote and what names them.
+                self::export_situations($context, $userid, $candidateid, $ulid);
+
                 // The requests for precision and their answers (T-20): the candidate reads every one on
                 // their declarations; a manager's own request covers the questions they asked.
                 $precisions = [];
@@ -1107,6 +1454,13 @@ class provider implements
                         exporter::FILEAREA,
                         0
                     );
+                    // The archive of the accompanying structure, kept as long as the account exists.
+                    writer::with_context($context)->export_area_files(
+                        [get_string('pluginname', 'tool_vae'), get_string('privacy:path:structure', 'tool_vae')],
+                        'tool_vae',
+                        structure_archive::FILEAREA,
+                        0
+                    );
                 }
 
                 continue;
@@ -1196,7 +1550,23 @@ class provider implements
             ];
         }
 
-        if (!$imports && !$mappings && !$archives && !$referents && !$named) {
+        // The authorizations to produce the archive of the structure: those about them as a manager, and those they wrote.
+        $authorizations = [];
+        foreach ($DB->get_records('tool_vae_booklet_auth', ['managerid' => $userid], 'id') as $row) {
+            $authorizations[] = [
+                'status' => $row->status,
+                'written' => \core_privacy\local\request\transform::datetime($row->timecreated),
+            ];
+        }
+        $authorizationswritten = [];
+        foreach ($DB->get_records('tool_vae_booklet_auth', ['grantedby' => $userid], 'id') as $row) {
+            $authorizationswritten[] = [
+                'status' => $row->status,
+                'written' => \core_privacy\local\request\transform::datetime($row->timecreated),
+            ];
+        }
+
+        if (!$imports && !$mappings && !$archives && !$referents && !$named && !$authorizations && !$authorizationswritten) {
             return;
         }
 
@@ -1208,6 +1578,8 @@ class provider implements
                 'archives' => $archives,
                 'referent_of' => $referents,
                 'referents_named' => $named,
+                'structure_authorizations' => $authorizations,
+                'structure_authorizations_written' => $authorizationswritten,
             ]
         );
     }
@@ -1377,6 +1749,13 @@ class provider implements
         $DB->execute("DELETE FROM {tool_vae_referent}" . $where, $params);
         $named = $userid === null ? '' : ' WHERE createdby = :userid';
         $DB->execute("UPDATE {tool_vae_referent} SET createdby = 0" . $named, $params);
+
+        // The authorization to produce the archive of the structure: the lines go with the manager they are about, and who wrote
+        // a line leaves it.
+        $managed = $userid === null ? '' : ' WHERE managerid = :userid';
+        $DB->execute("DELETE FROM {tool_vae_booklet_auth}" . $managed, $params);
+        $granted = $userid === null ? '' : ' WHERE grantedby = :userid';
+        $DB->execute("UPDATE {tool_vae_booklet_auth} SET grantedby = NULL" . $granted, $params);
     }
 
     /**
@@ -1415,6 +1794,62 @@ class provider implements
                 AND draftid IN (SELECT id FROM {tool_vae_draft} WHERE candidateid = :candidateid)",
             ['authorid' => $attestantid, 'candidateid' => $candidateid]
         );
+        // T-90, lot 3: the person leaves the positionings they wrote on this candidate's dossier, by account and, for a line
+        // restored from an archive, by ULID. The text stays: it is about the candidate, who has the right to read it. Read
+        // BEFORE the statements below take the author away: it decides whether the archives are redone.
+        $wrote = false;
+        $wroteselect = 'candidateid = :candidateid AND authorid = :authorid';
+        $wroteparams = ['candidateid' => $candidateid, 'authorid' => $attestantid];
+        if ($attestantuuid !== null) {
+            $wroteselect = 'candidateid = :candidateid AND (authorid = :authorid OR authoruuid = :authoruuid)';
+            $wroteparams['authoruuid'] = $attestantuuid;
+        }
+        foreach (['tool_vae_eval', 'tool_vae_certif'] as $positioning) {
+            $wrote = $wrote || $DB->record_exists_select($positioning, $wroteselect, $wroteparams);
+        }
+        foreach (['tool_vae_eval', 'tool_vae_certif'] as $positioning) {
+            $DB->execute(
+                "UPDATE {{$positioning}}
+                    SET authorid = NULL
+                  WHERE authorid = :authorid AND candidateid = :candidateid",
+                ['authorid' => $attestantid, 'candidateid' => $candidateid]
+            );
+            if ($attestantuuid !== null) {
+                $DB->execute(
+                    "UPDATE {{$positioning}}
+                        SET authoruuid = NULL
+                      WHERE authoruuid = :authoruuid AND candidateid = :candidateid",
+                    ['authoruuid' => $attestantuuid, 'candidateid' => $candidateid]
+                );
+            }
+        }
+        // Lot 1b: the person leaves the annotations they wrote on this vaeiste's situations and self-positioning, by account
+        // and, for a restored line, by ULID: the text stays, it is about the vaeiste, who has the right to read it. Their
+        // lines of consent go, written here or restored: a consent given to nobody has no meaning (and a restored line never
+        // opened the annotation, D-1b-L). Both are read BEFORE, for the archives to be redone, as the positionings are.
+        $consentselect = 'candidateid = :candidateid AND managerid = :managerid';
+        $consentparams = ['candidateid' => $candidateid, 'managerid' => $attestantid];
+        if ($attestantuuid !== null) {
+            $consentselect = 'candidateid = :candidateid AND (managerid = :managerid OR manageruuid = :manageruuid)';
+            $consentparams['manageruuid'] = $attestantuuid;
+        }
+        $wrote = $wrote || $DB->record_exists_select('tool_vae_note', $wroteselect, $wroteparams)
+            || $DB->record_exists_select('tool_vae_consent', $consentselect, $consentparams);
+        $DB->execute(
+            "UPDATE {tool_vae_note}
+                SET authorid = NULL
+              WHERE authorid = :authorid AND candidateid = :candidateid",
+            ['authorid' => $attestantid, 'candidateid' => $candidateid]
+        );
+        if ($attestantuuid !== null) {
+            $DB->execute(
+                "UPDATE {tool_vae_note}
+                    SET authoruuid = NULL
+                  WHERE authoruuid = :authoruuid AND candidateid = :candidateid",
+                ['authoruuid' => $attestantuuid, 'candidateid' => $candidateid]
+            );
+        }
+        $DB->delete_records_select('tool_vae_consent', $consentselect, $consentparams);
         // T-10, lot 5b: the person leaves the opinions they wrote on this candidate's deposits. The text
         // stays: it is about the candidate, who has the right to read it.
         $DB->execute(
@@ -1570,18 +2005,182 @@ class provider implements
             notifier::attestations_erased($candidateid, $lost, $attestantid);
         }
 
-        if (!$signedhere) {
+        if (!$signedhere && !$wrote) {
             return;
         }
 
         // An archive of this dossier still waiting for download carries the signature just
         // removed (lot 8). It goes; copies already downloaded are out of reach, as they state.
         exporter::discard($candidateid);
+        // The archive of the structure in place carries the opaque identifier of every author of a positioning: an author who
+        // is erased leaves it too (the direction produces a new one, which carries the text without them).
+        structure_archive::discard($candidateid);
 
         // The backups carry it too, and they are kept without time limit (lot 8 bis). Each owner
         // gets one of the dossier as it now stands in place of theirs.
         backup::refresh($candidateid);
         document_copies::refresh($candidateid);
+    }
+
+    /**
+     * Export the work situations of a vaeiste, their pieces, the annotations and the consents (lot 1b).
+     *
+     * To the vaeiste, everything about them: their situations with versions, snapshots, tags, pieces (the files of the pieces
+     * that stand included) and links, every annotation written about them, every line of consent. To anyone else, what is
+     * theirs alone: the annotations they wrote, under their account or under the opaque identifier a restored line names them
+     * by, and the lines of consent that name them. NOBODY IS EVER NAMED: an annotation goes to the vaeiste without its author,
+     * a consent without its manager, as an attestation goes without its signatory's account.
+     *
+     * @param context_user $context The vaeiste's context.
+     * @param int $userid Whose request it is.
+     * @param int $candidateid The vaeiste.
+     * @param string|null $ulid The opaque identifier of the requester, if this site gave one.
+     */
+    private static function export_situations(context_user $context, int $userid, int $candidateid, ?string $ulid): void {
+        global $DB;
+
+        $date = fn($time) => $time === null ? null : \core_privacy\local\request\transform::datetime((int) $time);
+        $own = $userid === $candidateid;
+        $path = [get_string('pluginname', 'tool_vae'), get_string('privacy:path:situations', 'tool_vae')];
+        $payload = [];
+
+        if ($own) {
+            $pieces = $DB->get_records('tool_vae_spiece', ['candidateid' => $candidateid], 'id');
+            $situations = [];
+            foreach ($DB->get_records('tool_vae_situation', ['candidateid' => $candidateid], 'fichecode, slot') as $row) {
+                $draft = $DB->get_record('tool_vae_draft', ['id' => $row->draftid]);
+                $snapshots = [];
+                foreach ($DB->get_records('tool_vae_sitversion', ['situationid' => $row->id], 'number') as $snapshot) {
+                    $snapshots[(int) $snapshot->number] = [
+                        'title'       => $snapshot->title,
+                        'periodstart' => $date($snapshot->periodstart),
+                        'periodend'   => $date($snapshot->periodend),
+                        'setting'     => $snapshot->setting,
+                        'tags'        => $snapshot->tags,
+                        'taken'       => $date($snapshot->timecreated),
+                    ];
+                }
+                $versions = [];
+                foreach ($DB->get_records('tool_vae_version', ['draftid' => $row->draftid], 'number') as $version) {
+                    $versions[] = [
+                        'number'       => (int) $version->number,
+                        'saved'        => $date($version->timecreated),
+                        'note'         => $version->note,
+                        'restoredfrom' => $version->restoredfrom === null ? null : (int) $version->restoredfrom,
+                        'content'      => $version->content,
+                        'snapshot'     => $snapshots[(int) $version->number] ?? null,
+                    ];
+                }
+                $tags = [];
+                foreach ($DB->get_records('tool_vae_sitetag', ['situationid' => $row->id], 'id') as $tag) {
+                    $tags[] = ['rank' => $tag->ficherang, 'tagged' => $date($tag->timecreated)];
+                }
+                $links = [];
+                foreach ($DB->get_records('tool_vae_slink', ['situationid' => $row->id], 'id') as $link) {
+                    $links[] = [
+                        'piece'    => $pieces[$link->pieceid]->uuid ?? null,
+                        'part'     => $link->part,
+                        'linked'   => $date($link->timecreated),
+                        'unlinked' => $date($link->timeremoved),
+                    ];
+                }
+                $situations[] = [
+                    'reference'   => $row->uuid,
+                    'record'      => $row->fichecode,
+                    'slot'        => (int) $row->slot,
+                    'title'       => $row->title,
+                    'periodstart' => $date($row->periodstart),
+                    'periodend'   => $date($row->periodend),
+                    'setting'     => $row->setting,
+                    'created'     => $date($row->timecreated),
+                    'modified'    => $date($row->timemodified),
+                    'tags'        => $tags,
+                    'working'     => $draft->working ?? null,
+                    'workingat'   => $date($draft->workingat ?? null),
+                    'versions'    => $versions,
+                    'pieces'      => $links,
+                ];
+            }
+            if ($situations) {
+                $payload['situations'] = $situations;
+            }
+
+            $listed = [];
+            foreach ($pieces as $piece) {
+                $listed[] = [
+                    'reference' => $piece->uuid,
+                    'record'    => $piece->fichecode,
+                    'kind'      => $piece->kind,
+                    'nature'    => $piece->nature,
+                    'title'     => $piece->title,
+                    'ext'       => $piece->ext,
+                    'mimetype'  => $piece->mimetype,
+                    'filesize'  => $piece->filesize === null ? null : (int) $piece->filesize,
+                    'sha256'    => $piece->sha256,
+                    'url'       => $piece->url,
+                    'addedat'   => $date($piece->timecreated),
+                    'removedat' => $date($piece->timeremoved),
+                ];
+                if ($piece->timeremoved === null && $piece->kind === 'file') {
+                    writer::with_context($context)->export_area_files(
+                        array_merge($path, ['pieces', $piece->uuid]),
+                        'tool_vae',
+                        spiece_manager::FILEAREA,
+                        (int) $piece->id
+                    );
+                }
+            }
+            if ($listed) {
+                $payload['pieces'] = $listed;
+            }
+        }
+
+        $annotations = [];
+        foreach ($DB->get_records('tool_vae_note', ['candidateid' => $candidateid], 'timecreated, id') as $note) {
+            $theirs = (int) $note->authorid === $userid || ($ulid !== null && (string) $note->authoruuid === $ulid);
+            if (!$own && !$theirs) {
+                continue;
+            }
+            $annotations[] = [
+                'reference' => $note->uuid,
+                'target'    => $note->target,
+                'situation' => (string) $note->targetuuid === '' ? null : $note->targetuuid,
+                'record'    => $note->fichecode,
+                'slot'      => (int) $note->slot,
+                'rank'      => $note->ficherang,
+                'text'      => $note->text,
+                'format'    => (int) $note->textformat,
+                'state'     => $note->state,
+                'withdraws' => $note->withdraws,
+                'sha256'    => $note->notehash,
+                'restored'  => $date($note->importedat),
+                'written'   => $date($note->timecreated),
+            ];
+        }
+        if ($annotations) {
+            $payload['annotations'] = $annotations;
+        }
+
+        $consents = [];
+        foreach ($DB->get_records('tool_vae_consent', ['candidateid' => $candidateid], 'timecreated, id') as $line) {
+            $theirs = (int) $line->managerid === $userid || ($ulid !== null && (string) $line->manageruuid === $ulid);
+            if (!$own && !$theirs) {
+                continue;
+            }
+            $consents[] = [
+                'reference' => $line->uuid,
+                'state'     => $line->state,
+                'restored'  => $date($line->importedat),
+                'written'   => $date($line->timecreated),
+            ];
+        }
+        if ($consents) {
+            $payload['consents'] = $consents;
+        }
+
+        if ($payload) {
+            writer::with_context($context)->export_data($path, (object) $payload);
+        }
     }
 
     /**

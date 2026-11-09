@@ -1,0 +1,67 @@
+{
+  "avertissement": "Positionnement de la structure, non validation : seul le jury valide, hors de la plateforme.",
+  "officiel": false,
+  "evaluations": [
+    {
+      "identifiant": "01JC8M3Q5R7T9V2X4Z6B8D0F1G",
+      "fiche": "RNCP12345",
+      "rang": "C01",
+      "intitule": "Competence d'exemple, intitule invente",
+      "statut": "en_cours_de_preuve",
+      "motif": "Deux situations observees, une troisieme est attendue.",
+      "empreinte": "1111111111111111111111111111111111111111111111111111111111111111",
+      "ecrit_le": "2026-11-02T09:30:00Z",
+      "fait_foi": false,
+      "auteur": "01JC8M3Q5R7T9V2X4Z6B8D0F2H"
+    },
+    {
+      "identifiant": "01JC8M3Q5R7T9V2X4Z6B8D0F3J",
+      "fiche": "RNCP12345",
+      "rang": "C01",
+      "statut": "suffisante_pour_certification",
+      "motif": "Trois situations observees sur le terrain.",
+      "empreinte": "2222222222222222222222222222222222222222222222222222222222222222",
+      "ecrit_le": "2026-11-04T14:00:00Z",
+      "fait_foi": true,
+      "auteur": "01JC8M3Q5R7T9V2X4Z6B8D0F2H"
+    },
+    {
+      "identifiant": "01JC8M3Q5R7T9V2X4Z6B8D0F4K",
+      "fiche": "RNCP12345",
+      "rang": "C02",
+      "statut": "a_construire",
+      "motif": "Pas encore de preuve.",
+      "empreinte": "3333333333333333333333333333333333333333333333333333333333333333",
+      "ecrit_le": "2026-11-04T14:05:00Z",
+      "fait_foi": true
+    }
+  ],
+  "certifications": [
+    {
+      "identifiant": "01JC8M3Q5R7T9V2X4Z6B8D0F5M",
+      "fiche": "RNCP12345",
+      "rang": "BC01",
+      "intitule": "Bloc d'exemple, intitule invente",
+      "statut": "certifie",
+      "date_decision": "2026-11-04",
+      "motif": "La structure se positionne sur ce bloc.",
+      "motif_alerte": "La competence C02 sera observee la semaine prochaine.",
+      "valable_jusqu_au": "2027-11-04",
+      "empreinte": "4444444444444444444444444444444444444444444444444444444444444444",
+      "ecrit_le": "2026-11-04T15:00:00Z",
+      "fait_foi": true,
+      "auteur": "01JC8M3Q5R7T9V2X4Z6B8D0F6N"
+    },
+    {
+      "identifiant": "01JC8M3Q5R7T9V2X4Z6B8D0F7P",
+      "fiche": "RS5555",
+      "rang": "",
+      "statut": "certifie",
+      "date_decision": "2026-11-05",
+      "motif": "La fiche est son propre bloc.",
+      "empreinte": "5555555555555555555555555555555555555555555555555555555555555555",
+      "ecrit_le": "2026-11-05T08:00:00Z",
+      "fait_foi": true
+    }
+  ]
+}

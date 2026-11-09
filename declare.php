@@ -34,6 +34,9 @@ use tool_vae\local\ai_assistant;
 use tool_vae\local\competency_gateway;
 use tool_vae\local\evidence_manager;
 use tool_vae\local\hidden_frameworks;
+use tool_vae\local\selfpos_manager;
+use tool_vae\local\selfpos_screen;
+use tool_vae\local\whereami_panel;
 
 require_login();
 
@@ -171,6 +174,28 @@ foreach ($hidden as $message) {
     // The record the form was refused for has just been named.
     if ($message !== $refusal) {
         echo $OUTPUT->notification($message, \core\output\notification::NOTIFY_INFO);
+    }
+}
+// Where the vaeiste stands on each record they declared on, folded, in reading (lot 1b, spec 1a § 6.6); with no declaration
+// yet, one way to position oneself, for whoever may. The form below stays as it was.
+$declaredcodes = $DB->get_fieldset_sql(
+    'SELECT DISTINCT fichecode FROM {tool_vae_evidence} WHERE candidateid = :c ORDER BY fichecode',
+    ['c' => $candidateid]
+);
+if (!$declaredcodes && selfpos_manager::can_write($candidateid)) {
+    echo html_writer::tag('p', html_writer::link(
+        selfpos_screen::url($candidateid),
+        s(get_string('selfposlink', 'tool_vae'))
+    ));
+}
+foreach ($declaredcodes as $declaredcode) {
+    $panel = whereami_panel::render($candidateid, (string) $declaredcode, ['link' => true, 'title' => '']);
+    if ($panel !== '') {
+        echo html_writer::tag(
+            'details',
+            html_writer::tag('summary', s(get_string('whereamideclare', 'tool_vae', $declaredcode))) . $panel,
+            ['class' => 'mb-3']
+        );
     }
 }
 $form->display();

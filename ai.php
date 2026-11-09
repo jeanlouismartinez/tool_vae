@@ -37,6 +37,7 @@ use tool_vae\local\ai_assistant;
 use tool_vae\local\ai_screens;
 use tool_vae\local\draft_manager;
 use tool_vae\local\faisabilite_catalog;
+use tool_vae\local\validation_catalog;
 
 require_login();
 // Everything here is posted by a form of the plugin: a link or an address typed by hand leads nowhere.
@@ -68,6 +69,10 @@ if ($source === 'declare') {
                 && faisabilite_catalog::kind($sectioncode) !== faisabilite_catalog::KIND_TEXT)
     ) {
         throw new moodle_exception('errorairight', 'tool_vae');
+    }
+    // A work situation (lot 1b) has its own screen; its draft is situation_manager's alone and is not opened from here.
+    if ($doctype === draft_manager::DOCTYPE_VALIDATION && $sectioncode === validation_catalog::SITUATION_SECTION) {
+        throw new moodle_exception('errordraftsection', 'tool_vae');
     }
     // Refuses an address that does not exist or that is closed, as section.php does.
     (new draft_manager())->section($candidateid, $doctype, $sectioncode, $slot, $fichecode);

@@ -1,0 +1,70 @@
+{
+  "avertissement": "Auto-positionnement du vaeiste, non validation : seul le jury valide, hors de la plateforme.",
+  "officiel": false,
+  "lignes": [
+    {
+      "identifiant": "01JC8M3Q5R7T9V2X4Z6B8D0G1A",
+      "fiche": "RNCP40692",
+      "rang": "",
+      "palier": 1,
+      "libelle": "Je decouvre",
+      "justification": "Je commence a lire le referentiel.",
+      "format": "texte",
+      "empreinte": "1111111111111111111111111111111111111111111111111111111111111111",
+      "ecrit_le": "2026-11-02T09:30:00Z",
+      "fait_foi": true
+    },
+    {
+      "identifiant": "01JC8M3Q5R7T9V2X4Z6B8D0G2B",
+      "fiche": "RNCP40692",
+      "rang": "C11",
+      "intitule": "Competence d'exemple, intitule invente",
+      "palier": 2,
+      "libelle": "Je pratique avec aide",
+      "justification": "Deux situations, avec ma collegue.",
+      "format": "texte",
+      "empreinte": "2222222222222222222222222222222222222222222222222222222222222222",
+      "ecrit_le": "2026-11-03T14:00:00Z",
+      "fait_foi": false
+    },
+    {
+      "identifiant": "01JC8M3Q5R7T9V2X4Z6B8D0G3C",
+      "fiche": "RNCP40692",
+      "rang": "C11",
+      "intitule": "Competence d'exemple, intitule invente",
+      "palier": 3,
+      "libelle": "J'agis seul",
+      "justification": "**Seul** depuis la troisieme semaine.",
+      "format": "markdown",
+      "empreinte": "3333333333333333333333333333333333333333333333333333333333333333",
+      "ecrit_le": "2026-11-05T10:00:00Z",
+      "fait_foi": true
+    },
+    {
+      "identifiant": "01JC8M3Q5R7T9V2X4Z6B8D0G4D",
+      "fiche": "RNCP40692",
+      "rang": "H111",
+      "intitule": "Habilete d'exemple, intitule invente",
+      "palier": 4,
+      "libelle": "Je maitrise et je transmets",
+      "justification": "",
+      "format": "texte",
+      "empreinte": "4444444444444444444444444444444444444444444444444444444444444444",
+      "ecrit_le": "2026-11-05T10:05:00Z",
+      "fait_foi": false
+    },
+    {
+      "identifiant": "01JC8M3Q5R7T9V2X4Z6B8D0G5E",
+      "fiche": "RNCP40692",
+      "rang": "H111",
+      "intitule": "Habilete d'exemple, intitule invente",
+      "palier": 0,
+      "libelle": "Niveau retire",
+      "justification": "Je me suis trompe d'element.",
+      "format": "texte",
+      "empreinte": "5555555555555555555555555555555555555555555555555555555555555555",
+      "ecrit_le": "2026-11-05T10:06:00Z",
+      "fait_foi": true
+    }
+  ]
+}

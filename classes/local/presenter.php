@@ -136,7 +136,7 @@ final class presenter {
      * @param \stdClass $source A row of tool_vae_source.
      * @return string HTML.
      */
-    private static function provenance(\stdClass $source): string {
+    public static function provenance(\stdClass $source): string {
         // A record whose first import failed holds no published version yet, and a date of
         // zero would announce 1 January 1970 as the day France competences published it.
         return \html_writer::div(

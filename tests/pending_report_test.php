@@ -367,4 +367,45 @@ final class pending_report_test extends \advanced_testcase {
         $this->assertFalse(notifier::deliver($tasks[0]->get_custom_data()));
         $this->assertCount(0, $sink->get_messages());
     }
+
+    /**
+     * How many managers a declaration of a candidate would be announced to: the followers who may attest (the reader may
+     * not) and whose account is neither suspended nor deleted - the audience of the notifier, counted and never named.
+     */
+    public function test_reachable_counts_the_managers_who_follow_and_may_attest_and_not_the_reader(): void {
+        $this->assertSame([(int) $this->candidate->id => 1], pending_report::reachable([(int) $this->candidate->id]));
+    }
+
+    public function test_reachable_gives_zero_to_a_candidate_nobody_follows_and_one_key_per_candidate_asked(): void {
+        $alone = $this->getDataGenerator()->create_user();
+
+        $found = pending_report::reachable([(int) $alone->id, (int) $this->candidate->id]);
+
+        $this->assertSame([(int) $alone->id => 0, (int) $this->candidate->id => 1], $found);
+        $this->assertSame([], pending_report::reachable([]));
+    }
+
+    public function test_reachable_does_not_count_a_suspended_manager(): void {
+        global $DB;
+        $DB->set_field('user', 'suspended', 1, ['id' => $this->manager->id]);
+
+        $this->assertSame([(int) $this->candidate->id => 0], pending_report::reachable([(int) $this->candidate->id]));
+    }
+
+    /**
+     * A holder of viewany is not a follower (access::followers): being told of every declaration would make an exception
+     * of management into a mailing list. The count must not hide that fact.
+     */
+    public function test_reachable_does_not_count_a_holder_of_viewany_who_follows_nobody(): void {
+        $generator = $this->getDataGenerator();
+        $director = $generator->create_user();
+        $role = $generator->create_role();
+        assign_capability('tool/vae:viewany', CAP_ALLOW, $role, \context_system::instance()->id, true);
+        assign_capability('tool/vae:attest', CAP_ALLOW, $role, \context_system::instance()->id, true);
+        role_assign($role, $director->id, \context_system::instance()->id);
+        $alone = $generator->create_user();
+        accesslib_clear_all_caches_for_unit_testing();
+
+        $this->assertSame([(int) $alone->id => 0], pending_report::reachable([(int) $alone->id]));
+    }
 }

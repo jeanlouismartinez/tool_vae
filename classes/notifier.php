@@ -17,10 +17,14 @@
 namespace tool_vae;
 
 use tool_vae\event\attestation_withdrawn;
+use tool_vae\event\certification_recorded;
 use tool_vae\event\competency_left_record;
+use tool_vae\event\consent_changed;
 use tool_vae\event\deposit_created;
+use tool_vae\event\evaluation_recorded;
 use tool_vae\event\evidence_attested;
 use tool_vae\event\evidence_declared;
+use tool_vae\event\note_recorded;
 use tool_vae\event\opinion_created;
 use tool_vae\event\piece_added;
 use tool_vae\event\request_created;
@@ -28,8 +32,10 @@ use tool_vae\event\withdrawal_refused;
 use tool_vae\event\withdrawal_requested;
 use tool_vae\local\access;
 use tool_vae\local\attestation_manager;
+use tool_vae\local\consent_manager;
 use tool_vae\local\draft_manager;
 use tool_vae\local\importer;
+use tool_vae\local\note_manager;
 use tool_vae\local\piece_manager;
 use tool_vae\local\referent_manager;
 use tool_vae\task\send_notification;
@@ -86,6 +92,11 @@ use tool_vae\task\send_notification;
  * there is played again and finds nothing left to withdraw; it never makes the erasure fail (caught, said to a developer); and
  * the tasks of one candidate are merged, so that a batch of approvals sends one message, not one per manager erased.
  *
+ * THE ANNOTATIONS AND THE CONSENT (lot 1b). An annotation is told to the vaeiste (noteadded), a consent to the person it names
+ * (consentgiven). Neither the text of the annotation nor its author is told; the message of a consent names the vaeiste, to the
+ * one person they chose. A withdrawal, of an annotation or of a consent, tells nobody. Both are read again at sending: the
+ * annotation must still stand, the consent must still stand, and its holder still follow the vaeiste and hold annotate.
+ *
  * WHO SENDS: THE SITE'S NO-REPLY USER, ALWAYS - never the candidate, never the manager who signed
  * or withdrew. A withdrawal erases who signed, on purpose - see attestation_manager - and a
  * notification "from" them would keep in the candidate's inbox the very name the withdrawal removes.
@@ -136,6 +147,15 @@ class notifier {
 
     /** @var string A manager wrote an opinion on a deposit: told to the candidate (T-10, lot 5b). */
     public const OPINION_MADE = 'opinionmade';
+
+    /** @var string A line of positioning of the structure was written: told to the candidate, never what it says (T-84). */
+    public const POSITIONING_RECORDED = 'positioningrecorded';
+
+    /** @var string A manager the vaeiste consented to annotated their situations or self-positioning: told to the vaeiste (lot 1b). */
+    public const NOTE_ADDED = 'noteadded';
+
+    /** @var string The vaeiste consented to a manager annotating: told to that manager, with the vaeiste's name (lot 1b). */
+    public const CONSENT_GIVEN = 'consentgiven';
 
     /** @var string A declaration waited for an attestation for the chosen number of days: told to the managers (T-22). */
     public const DECLARATION_OVERDUE = 'declarationoverdue';
@@ -300,6 +320,84 @@ class notifier {
             ]);
         } catch (\Throwable $e) {
             self::not_queued(self::OPINION_MADE, $e);
+        }
+    }
+
+    /**
+     * An evaluation was written: queue a message for the candidate.
+     *
+     * Neither the status, nor the reason, nor the author: only that a line was added. The candidate reads the line,
+     * and who wrote it, in the dossier (T-84, the information of the person).
+     *
+     * @param evaluation_recorded $event
+     */
+    public static function evaluation_recorded(evaluation_recorded $event): void {
+        self::positioning_written((int) $event->relateduserid);
+    }
+
+    /**
+     * A certification was written: queue a message for the candidate, the same way.
+     *
+     * @param certification_recorded $event
+     */
+    public static function certification_recorded(certification_recorded $event): void {
+        self::positioning_written((int) $event->relateduserid);
+    }
+
+    /**
+     * Queue the message of a positioning line for the person it is about.
+     *
+     * @param int $candidateid
+     */
+    private static function positioning_written(int $candidateid): void {
+        try {
+            self::queue(self::POSITIONING_RECORDED, $candidateid, $candidateid, []);
+        } catch (\Throwable $e) {
+            self::not_queued(self::POSITIONING_RECORDED, $e);
+        }
+    }
+
+    /**
+     * An annotation was written: queue a message for the vaeiste (lot 1b).
+     *
+     * A withdrawal tells nobody: the author takes their word back, and the vaeiste reads it in the dossier. The task carries
+     * the id of the annotation and nothing else; neither its text nor its author.
+     *
+     * @param note_recorded $event
+     */
+    public static function note_recorded(note_recorded $event): void {
+        try {
+            if (($event->other['state'] ?? null) !== note_manager::ACTIVE) {
+                return;
+            }
+            $candidateid = (int) $event->relateduserid;
+            self::queue(self::NOTE_ADDED, $candidateid, $candidateid, ['noteid' => (int) $event->objectid]);
+        } catch (\Throwable $e) {
+            self::not_queued(self::NOTE_ADDED, $e);
+        }
+    }
+
+    /**
+     * The vaeiste consented to a person annotating: queue a message for that person (lot 1b).
+     *
+     * A withdrawal tells nobody: the consent is the vaeiste's to take back, and the person reads it in the dossier.
+     *
+     * @param consent_changed $event
+     */
+    public static function consent_changed(consent_changed $event): void {
+        try {
+            if (($event->other['state'] ?? null) !== consent_manager::GIVEN) {
+                return;
+            }
+            // The manager is the person the event is about; the vaeiste is the owner of the context it is raised in.
+            self::queue(
+                self::CONSENT_GIVEN,
+                (int) $event->relateduserid,
+                (int) $event->contextinstanceid,
+                ['consentid' => (int) $event->objectid]
+            );
+        } catch (\Throwable $e) {
+            self::not_queued(self::CONSENT_GIVEN, $e);
         }
     }
 
@@ -591,12 +689,15 @@ class notifier {
             self::WITHDRAWAL_REFUSED,
             self::DEPOSIT_MADE,
             self::OPINION_MADE,
+            self::POSITIONING_RECORDED,
             self::PRECISION_ASKED,
             self::DECLARATION_OVERDUE,
             self::PIECE_AFTER_ATTEST,
             self::DECLARATION_PURGED,
             self::ATTESTATIONS_ERASED,
             self::DECLARATIONS_AWAIT_AGAIN,
+            self::NOTE_ADDED,
+            self::CONSENT_GIVEN,
         ];
         if (!in_array($provider, $providers, true)) {
             throw new \coding_exception("Unknown notification '$provider'.");
@@ -632,6 +733,18 @@ class notifier {
 
         if ($provider === self::PRECISION_ASKED) {
             return self::deliver_precision($recipient, $candidateid, (int) ($data->requestid ?? 0));
+        }
+
+        if ($provider === self::POSITIONING_RECORDED) {
+            return self::deliver_positioning($recipient, $candidateid);
+        }
+
+        if ($provider === self::NOTE_ADDED) {
+            return self::deliver_note($recipient, $candidateid, (int) ($data->noteid ?? 0));
+        }
+
+        if ($provider === self::CONSENT_GIVEN) {
+            return self::deliver_consent($recipient, $candidateid, (int) ($data->consentid ?? 0));
         }
 
         if ($provider === self::OPINION_MADE) {
@@ -804,6 +917,113 @@ class notifier {
 
         return self::send(self::OPINION_MADE, $recipient, $candidateid, [
             'number' => $number,
+        ]);
+    }
+
+    /**
+     * The message of a positioning line, if it is still true: the recipient is the person it is about, they may still open
+     * their dossier, and at least one line, of evaluation or of certification, stands for them.
+     *
+     * @param \stdClass $recipient
+     * @param int $candidateid
+     * @return bool
+     */
+    private static function deliver_positioning(\stdClass $recipient, int $candidateid): bool {
+        global $DB;
+
+        if ((int) $recipient->id !== $candidateid) {
+            return false;
+        }
+        if (!has_capability('tool/vae:viewown', \context_user::instance($candidateid), $candidateid)) {
+            return false;
+        }
+        if (
+            !$DB->record_exists('tool_vae_eval', ['candidateid' => $candidateid])
+            && !$DB->record_exists('tool_vae_certif', ['candidateid' => $candidateid])
+        ) {
+            return false;
+        }
+        return self::send(self::POSITIONING_RECORDED, $recipient, $candidateid, []);
+    }
+
+    /**
+     * The message of an annotation, if it is still true: the recipient is the vaeiste it is about, they may still open their
+     * dossier, and the annotation is still there, theirs, and stands - no later line withdraws it.
+     *
+     * Read from the table directly, by id: note_manager::for_target() asks for the right to read, and cron runs as nobody in
+     * particular. Neither the text nor the author is used: the message says that an annotation was written, nothing more.
+     *
+     * @param \stdClass $recipient
+     * @param int $candidateid
+     * @param int $noteid The row of tool_vae_note the event was raised for.
+     * @return bool
+     */
+    private static function deliver_note(\stdClass $recipient, int $candidateid, int $noteid): bool {
+        global $DB;
+
+        if ((int) $recipient->id !== $candidateid) {
+            return false;
+        }
+        if (!has_capability('tool/vae:viewown', \context_user::instance($candidateid), $candidateid)) {
+            return false;
+        }
+        $note = $DB->get_record(note_manager::TABLE, ['id' => $noteid], 'id, candidateid, uuid, state');
+        if (!$note || (int) $note->candidateid !== $candidateid || $note->state !== note_manager::ACTIVE) {
+            return false;
+        }
+        if ($DB->record_exists(note_manager::TABLE, ['candidateid' => $candidateid, 'withdraws' => $note->uuid])) {
+            return false;
+        }
+
+        return self::send(self::NOTE_ADDED, $recipient, $candidateid, []);
+    }
+
+    /**
+     * The message of a consent, if it is still true: the consent of the vaeiste to the recipient still stands, and the
+     * recipient still follows the vaeiste and holds annotate in their context - the consent would otherwise open nothing.
+     *
+     * ONE MESSAGE FOR ONE CONSENT THAT STANDS. A consent given, taken back and given again before cron queues two tasks; only
+     * the one whose line is still the latest of the couple written on this site is sent - the same latest line
+     * consent_manager::stands() reads. The vaeiste must still be reachable, as the recipient is: their name is not sent
+     * about an account that is deleted or suspended.
+     *
+     * @param \stdClass $recipient
+     * @param int $candidateid
+     * @param int $consentid The row of tool_vae_consent the event was raised for.
+     * @return bool
+     */
+    private static function deliver_consent(\stdClass $recipient, int $candidateid, int $consentid): bool {
+        global $DB;
+
+        $managerid = (int) $recipient->id;
+        if ($managerid === $candidateid || !consent_manager::stands($candidateid, $managerid)) {
+            return false;
+        }
+        $latest = $DB->get_records_select(
+            consent_manager::TABLE,
+            'candidateid = :candidateid AND managerid = :managerid AND importedat IS NULL',
+            ['candidateid' => $candidateid, 'managerid' => $managerid],
+            'timecreated DESC, id DESC',
+            'id',
+            0,
+            1
+        );
+        if (!$latest || (int) reset($latest)->id !== $consentid) {
+            return false;
+        }
+        if (
+            !access::follows($candidateid, $managerid)
+            || !has_capability('tool/vae:annotate', \context_user::instance($candidateid), $managerid)
+        ) {
+            return false;
+        }
+        $candidate = self::reachable_user($candidateid);
+        if ($candidate === null) {
+            return false;
+        }
+
+        return self::send(self::CONSENT_GIVEN, $recipient, $candidateid, [
+            'candidate' => fullname($candidate),
         ]);
     }
 

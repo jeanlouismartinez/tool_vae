@@ -83,6 +83,16 @@ $messageproviders = [
 
     // To the managers who follow a candidate and may attest: a declaration has waited for an attestation
     // for the number of days the administrator chose (T-22). The candidate's name and a count, no text.
+    // To the candidate: a line of positioning of the structure was written about them (T-84). Only that a line was
+    // added: neither the status, nor the reason, nor the author.
+    'positioningrecorded' => [
+        'capability' => 'tool/vae:viewown',
+        'defaults' => [
+            'popup' => MESSAGE_PERMITTED + MESSAGE_DEFAULT_ENABLED,
+            'email' => MESSAGE_PERMITTED + MESSAGE_DEFAULT_ENABLED,
+        ],
+    ],
+
     'declarationoverdue' => [
         'capability' => 'tool/vae:attest',
         'defaults' => [
@@ -151,6 +161,26 @@ $messageproviders = [
     // To the candidate: a competency they declared against is absent from its record's latest import.
     'competencyleftrecord' => [
         'capability' => 'tool/vae:viewown',
+        'defaults' => [
+            'popup' => MESSAGE_PERMITTED + MESSAGE_DEFAULT_ENABLED,
+            'email' => MESSAGE_PERMITTED + MESSAGE_DEFAULT_ENABLED,
+        ],
+    ],
+
+    // To the vaeiste: a manager they consented to wrote an annotation on one of their work situations or on their
+    // self-positioning (lot 1b). Neither the text nor the author: that one was written, and that it is no validation.
+    'noteadded' => [
+        'capability' => 'tool/vae:viewown',
+        'defaults' => [
+            'popup' => MESSAGE_PERMITTED + MESSAGE_DEFAULT_ENABLED,
+            'email' => MESSAGE_PERMITTED + MESSAGE_DEFAULT_ENABLED,
+        ],
+    ],
+
+    // To a manager who follows the vaeiste: the vaeiste consented to their annotating (lot 1b). The vaeiste's name, no text.
+    // A withdrawal of the consent tells nobody.
+    'consentgiven' => [
+        'capability' => 'tool/vae:annotate',
         'defaults' => [
             'popup' => MESSAGE_PERMITTED + MESSAGE_DEFAULT_ENABLED,
             'email' => MESSAGE_PERMITTED + MESSAGE_DEFAULT_ENABLED,

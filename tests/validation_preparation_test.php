@@ -27,9 +27,10 @@ use tool_vae\local\validation_status;
  *
  * WHAT IS ASSERTED. That the sections of a record are the three parts of each bloc and one synthesis, or the three parts
  * once for a record without blocs or with too many; that only those places can be written; that two records have the
- * same section codes without meeting, because the record is part of the address; that the candidate alone reads these
- * sections - neither the site administrator nor a reader holding draftview (MC-16) - while the dossier de faisabilité
- * stays readable as it was; that a bloc withdrawn from the record keeps its text and its name; that the column and the
+ * same section codes without meeting, because the record is part of the address; that these sections are read by their
+ * author and by whoever may view the dossier, never by the site administrator (MC-16, D-1b-G), in reading only, while the
+ * export by anyone but the author still carries none of them and the dossier de faisabilité stays readable as it was;
+ * that a bloc withdrawn from the record keeps its text and its name; that the column and the
  * index of the table are the ones the address needs.
  *
  * @package    tool_vae
@@ -249,18 +250,68 @@ final class validation_preparation_test extends \advanced_testcase {
         $this->assertSame('', $draft->fichecode);
     }
 
-    public function test_the_candidate_alone_reads_the_preparation(): void {
+    /**
+     * A user holding some capabilities through a role assigned in one context.
+     *
+     * @param string[] $capabilities
+     * @param \context $context Where the role is assigned.
+     * @return \stdClass
+     */
+    private function user_with(array $capabilities, \context $context): \stdClass {
+        $generator = $this->getDataGenerator();
+        $user = $generator->create_user();
+        $role = $generator->create_role();
+        foreach ($capabilities as $capability) {
+            assign_capability($capability, CAP_ALLOW, $role, \context_system::instance()->id, true);
+        }
+        role_assign($role, $user->id, $context->id);
+        accesslib_clear_all_caches_for_unit_testing();
+
+        return $user;
+    }
+
+    /**
+     * The readers of D-1b-G: who follows the candidate without draftview, the direction, who follows someone else, another
+     * vaeiste.
+     *
+     * @return \stdClass[] Keyed by who they are.
+     */
+    private function readers(): array {
+        $someoneelse = $this->getDataGenerator()->create_user();
+        $other = $this->user_with(['tool/vae:draftown', 'tool/vae:viewown'], \context_system::instance());
+
+        return [
+            'follower' => $this->user_with(['tool/vae:viewassigned'], \context_user::instance($this->candidate->id)),
+            'direction' => $this->user_with(['tool/vae:viewany'], \context_system::instance()),
+            'stranger' => $this->user_with(['tool/vae:viewassigned'], \context_user::instance($someoneelse->id)),
+            'vaeiste' => $other,
+        ];
+    }
+
+    public function test_the_author_and_whoever_may_view_the_dossier_read_the_preparation(): void {
         $draft = $this->prepare('RS11111', '_decrire');
         $manager = new draft_manager();
         $manager->save_version((int) $draft->id, 'Mon texte.');
+        $readers = $this->readers();
 
         $this->setUser($this->candidate);
         $this->assertCount(1, $manager->versions((int) $draft->id));
         $this->assertTrue(draft_manager::can_read_doctype((int) $this->candidate->id, 'validation'));
 
-        foreach ([get_admin(), $this->reader] as $other) {
+        // Whoever may view the dossier reads the preparation: the follower holds no draftview, the direction holds viewany.
+        foreach (['follower', 'direction'] as $who) {
+            $this->setUser($readers[$who]);
+            $this->assertTrue(draft_manager::can_read_doctype((int) $this->candidate->id, 'validation'), $who);
+            $this->assertCount(1, $manager->versions((int) $draft->id), $who);
+            draft_manager::require_can_read_draft($draft);
+        }
+
+        // Whoever may not view the dossier does not, and the site administrator stays refused (MC-16): it is the one reader
+        // the rule sets aside by hand, who would pass can_view() through viewany.
+        $refused = ['the administrator' => get_admin(), 'stranger' => $readers['stranger'], 'vaeiste' => $readers['vaeiste']];
+        foreach ($refused as $who => $other) {
             $this->setUser($other);
-            $this->assertFalse(draft_manager::can_read_doctype((int) $this->candidate->id, 'validation'));
+            $this->assertFalse(draft_manager::can_read_doctype((int) $this->candidate->id, 'validation'), $who);
             $this->assert_refused(function () use ($manager, $draft) {
                 $manager->versions((int) $draft->id);
             }, 'errordraftrefused');
@@ -268,6 +319,169 @@ final class validation_preparation_test extends \advanced_testcase {
                 draft_manager::require_can_read_draft($draft);
             }, 'errordraftrefused');
         }
+    }
+
+    public function test_the_journal_stays_the_authors_alone_for_whoever_may_view_the_dossier(): void {
+        foreach ($this->readers() + ['the administrator' => get_admin()] as $who => $other) {
+            $this->setUser($other);
+            $this->assertFalse(draft_manager::can_read_doctype((int) $this->candidate->id, 'reflexion'), $who);
+        }
+    }
+
+    /**
+     * The rule of the export is the one of amendment 3 of the DER (D-1b-A): an archive taken by anyone but the author carries
+     * no preparation, even now that whoever follows the candidate reads it on the screen. Always true: this holds the line.
+     */
+    public function test_the_export_rule_of_the_der_is_unchanged_a_third_party_export_carries_no_preparation(): void {
+        global $DB;
+
+        // An archive needs declarations the plugin can name: the rows of setUp give way to one declared as the screen does.
+        $DB->delete_records('tool_vae_evidence', ['candidateid' => (int) $this->candidate->id]);
+        $role = $this->getDataGenerator()->create_role();
+        foreach (['declare', 'viewown', 'export'] as $capability) {
+            assign_capability('tool/vae:' . $capability, CAP_ALLOW, $role, \context_system::instance()->id, true);
+        }
+        role_assign($role, $this->candidate->id, \context_user::instance($this->candidate->id)->id);
+        accesslib_clear_all_caches_for_unit_testing();
+        $this->setUser($this->candidate);
+        (new \tool_vae\local\evidence_manager())->declare_activity((int) $this->candidate->id, (object) [
+            'competencyid' => (int) $DB->get_field('competency', 'id', ['idnumber' => 'RS11111-C01'], MUST_EXIST),
+            'periodstart' => 1756684800, 'periodend' => 1782777600,
+            'settingtype' => 'ehpad', 'situation' => 'Une situation.', 'situationformat' => FORMAT_PLAIN,
+        ]);
+        $draft = $this->prepare('RS11111', '_decrire');
+        (new draft_manager())->save_version((int) $draft->id, 'Ma préparation enregistrée.');
+        $readers = $this->readers();
+
+        foreach (['follower' => $readers['follower'], 'direction' => $readers['direction'], 'admin' => get_admin()] as $who => $u) {
+            $this->setUser($u);
+            $files = $this->unzip((new \tool_vae\local\exporter())->export((int) $this->candidate->id));
+            $this->assertArrayNotHasKey(\tool_vae\local\exporter::VALIDATION_PATH, $files, $who);
+            $this->assertStringNotContainsString('Ma préparation enregistrée.', implode('', $files), $who);
+        }
+
+        $this->setUser($this->candidate);
+        $files = $this->unzip((new \tool_vae\local\exporter())->export((int) $this->candidate->id));
+        $this->assertArrayHasKey(\tool_vae\local\exporter::VALIDATION_PATH, $files, 'The author carries it away.');
+    }
+
+    /**
+     * The files of a stored archive, path => content.
+     *
+     * @param \stored_file $archive
+     * @return string[]
+     */
+    private function unzip(\stored_file $archive): array {
+        $path = $archive->copy_content_to_temp();
+        $zip = new \ZipArchive();
+        $zip->open($path);
+        $files = [];
+        for ($index = 0; $index < $zip->numFiles; $index++) {
+            $name = $zip->getNameIndex($index);
+            if (substr($name, -1) !== '/') {
+                $files[$name] = (string) $zip->getFromIndex($index);
+            }
+        }
+        $zip->close();
+        unlink($path);
+
+        return $files;
+    }
+
+    /**
+     * What a page of the plugin writes for the current user, played as the browser asks it.
+     *
+     * @param array $get The parameters of the request.
+     * @param string $script The page, validation.php unless said.
+     * @return string
+     */
+    private function page(array $get, string $script = 'validation.php'): string {
+        // The page is a script of the site: it reads these as globals.
+        global $CFG, $DB, $OUTPUT, $PAGE, $SITE, $USER;
+
+        $_GET = $get;
+        $PAGE = new \moodle_page();
+        ob_start();
+        try {
+            include(__DIR__ . '/../' . $script);
+        } finally {
+            $out = ob_get_clean();
+            $_GET = [];
+        }
+
+        return $out;
+    }
+
+    public function test_a_reader_opens_the_preparation_of_the_vaeiste_in_reading_only(): void {
+        $manager = new draft_manager();
+        $described = $this->prepare('RS11111', '_decrire');
+        $manager->save_version((int) $described->id, 'Le texte de la version.');
+        $manager->save_working((int) $described->id, 'Le texte en cours.');
+        $linked = $this->prepare('RS11111', '_lier');
+        $manager->save_version((int) $linked->id, 'Le lien enregistré.');
+        // Closed, the preparation is still read.
+        set_config('validationopen', 0, 'tool_vae');
+        $follower = $this->readers()['follower'];
+
+        $this->setUser($follower);
+        $out = $this->page(['userid' => (int) $this->candidate->id, 'fiche' => 'RS11111']);
+
+        $this->assertStringNotContainsString('section.php', $out, 'A reader writes nothing.');
+        $this->assertStringContainsString('Le texte de la version.', $out);
+        $this->assertStringContainsString('Le lien enregistré.', $out);
+        $this->assertStringContainsString('Le texte en cours.', $out);
+        $this->assertStringContainsString(s(get_string('situationworkingnotice', 'tool_vae')), $out);
+        $this->assertStringContainsString('history.php?draftid=' . $described->id, $out);
+        $this->assertStringContainsString('history.php?draftid=' . $linked->id, $out);
+        $this->assertStringContainsString(s(get_string('validationreadnotice', 'tool_vae')), $out);
+        $this->assertStringContainsString(
+            s(get_string('validationreadheading', 'tool_vae', fullname($this->candidate))),
+            $out
+        );
+    }
+
+    public function test_a_reader_who_may_not_read_the_preparation_is_refused_the_page(): void {
+        $this->prepare('RS11111', '_decrire');
+        $this->setAdminUser();
+        $this->assert_refused(function () {
+            $this->page(['userid' => (int) $this->candidate->id, 'fiche' => 'RS11111']);
+        }, 'errordraftrefused');
+
+        $this->setUser($this->readers()['stranger']);
+        $this->expectException(\required_capability_exception::class);
+        $this->page(['userid' => (int) $this->candidate->id, 'fiche' => 'RS11111']);
+    }
+
+    public function test_the_dossier_offers_the_reader_the_preparation_once_begun_and_never_to_the_administrator(): void {
+        $readers = $this->readers();
+        $link = s(get_string('validationreadlink', 'tool_vae'));
+        $get = ['userid' => (int) $this->candidate->id];
+
+        $this->setUser($readers['direction']);
+        $this->assertStringNotContainsString($link, $this->page($get, 'dossier.php'), 'Nothing begun, nothing offered.');
+
+        $this->prepare('RS11111', '_decrire');
+        foreach (['follower' => $readers['follower'], 'direction' => $readers['direction']] as $who => $reader) {
+            $this->setUser($reader);
+            $this->assertStringContainsString($link, $this->page($get, 'dossier.php'), $who);
+        }
+        $this->setAdminUser();
+        $this->assertStringNotContainsString($link, $this->page($get, 'dossier.php'), 'The administrator is not offered it.');
+        $role = $this->getDataGenerator()->create_role();
+        assign_capability('tool/vae:viewown', CAP_ALLOW, $role, \context_system::instance()->id, true);
+        role_assign($role, $this->candidate->id, \context_user::instance($this->candidate->id)->id);
+        accesslib_clear_all_caches_for_unit_testing();
+        $this->setUser($this->candidate);
+        $this->assertStringNotContainsString($link, $this->page([], 'dossier.php'), 'The author writes it from their own button.');
+    }
+
+    public function test_the_author_still_writes_from_the_page(): void {
+        $this->prepare('RS11111', '_decrire');
+        $this->setUser($this->candidate);
+        $out = $this->page(['fiche' => 'RS11111']);
+
+        $this->assertStringContainsString('section.php', $out);
+        $this->assertStringNotContainsString(s(get_string('validationreadnotice', 'tool_vae')), $out);
     }
 
     public function test_the_dossier_de_faisabilite_stays_readable_as_it_was(): void {
@@ -537,5 +751,87 @@ final class validation_preparation_test extends \advanced_testcase {
         ));
         $columns = $DB->get_columns('tool_vae_draft');
         $this->assertTrue($columns['fichecode']->not_null);
+    }
+
+    /**
+     * The work situations are not a section of the preparation (D-1b-D): they have no deposit, no PDF, no place in the
+     * document of validation.schema.json and no line in the status of the record. The catalogue knows their address all the
+     * same, so that a draft can hold their text.
+     */
+    public function test_the_situations_never_enter_the_preparation_document_nor_its_status(): void {
+        global $DB;
+
+        $draft = $this->prepare('RS11111', '_decrire');
+        $drafts = new draft_manager();
+        $drafts->save_version((int) $draft->id, 'Ma partie.');
+        $situations = new \tool_vae\local\situation_manager();
+        $situation = $situations->create((int) $this->candidate->id, 'RS11111');
+        $situations->save_version((int) $situation->id, 'Ma situation.');
+        $this->assertSame(2, $DB->count_records('tool_vae_draft', [
+            'candidateid' => $this->candidate->id, 'doctype' => draft_manager::DOCTYPE_VALIDATION, 'fichecode' => 'RS11111',
+        ]));
+
+        $saved = \tool_vae\local\validation_overview::saved_versions((int) $this->candidate->id);
+        $this->assertSame(['_decrire'], array_map(fn($row) => (string) $row->section, $saved));
+        $this->assertSame(['_decrire'], array_keys(validation_status::for_record((int) $this->candidate->id, 'RS11111')));
+        $this->assertNotContains(
+            validation_catalog::SITUATION_SECTION,
+            array_column(validation_catalog::sections('RS11111'), 'section')
+        );
+        $this->assertNotContains(
+            validation_catalog::SITUATION_SECTION,
+            array_column(validation_catalog::sections('RS00000'), 'section')
+        );
+
+        // The catalogue knows the address of a situation: a slot from 1 to MAX_SITUATIONS, on an imported record.
+        $this->assertSame(['', validation_catalog::PART_SITUATION], validation_catalog::parse('_situation'));
+        $this->assertNull(validation_catalog::parse('bc01_situation'), 'A situation is never under a bloc.');
+        $this->assertTrue(validation_catalog::valid_address('RS11111', '_situation', 1));
+        $this->assertTrue(validation_catalog::valid_address('RS00000', '_situation', validation_catalog::MAX_SITUATIONS));
+        $this->assertFalse(validation_catalog::valid_address('RS11111', '_situation', 0));
+        $this->assertFalse(validation_catalog::valid_address('RS11111', '_situation', validation_catalog::MAX_SITUATIONS + 1));
+        $this->assertFalse(validation_catalog::valid_address('RS99999', '_situation', 1));
+        $this->assertFalse(validation_catalog::valid_address('RS11111', '_decrire', 1), 'The other parts keep slot 0.');
+        $this->assertSame(
+            get_string('validpart:situation', 'tool_vae', 3),
+            validation_catalog::label('RS11111', '_situation', 3)
+        );
+        $this->assertSame(
+            get_string('validpart:situation', 'tool_vae', 1),
+            draft_manager::label($DB->get_record('tool_vae_draft', ['id' => $situation->draftid]))
+        );
+    }
+
+    /**
+     * The doors of draft_manager reserved to situation_manager open no other section, and an archive brings no situation back
+     * as a section of the preparation (lot 1b, correction round 1).
+     */
+    public function test_the_reserved_doors_of_the_situations_open_no_other_section(): void {
+        global $DB;
+
+        $draft = $this->prepare('RS11111', '_decrire');
+        $drafts = new draft_manager();
+        $drafts->save_version((int) $draft->id, 'Ma partie.');
+
+        $this->assert_refused(fn() => $drafts->save_version_of_situation((int) $draft->id, 'Autre.'), 'errordraftsection');
+        $this->assert_refused(fn() => $drafts->restore_of_situation((int) $draft->id, 1), 'errordraftsection');
+        $this->assertSame(1, $DB->count_records('tool_vae_version', ['draftid' => $draft->id]));
+
+        // The archive: a rubric coded _situation is no section of the preparation (D-1b-D).
+        $this->assert_refused(function () use ($drafts) {
+            $drafts->restore_from_archive(
+                (int) $this->candidate->id,
+                validation_catalog::SITUATION_SECTION,
+                0,
+                'Texte.',
+                time(),
+                '',
+                draft_manager::DOCTYPE_VALIDATION,
+                'RS11111'
+            );
+        }, 'errordraftsection');
+        $this->assertSame(0, $DB->count_records('tool_vae_draft', [
+            'candidateid' => $this->candidate->id, 'section' => validation_catalog::SITUATION_SECTION,
+        ]));
     }
 }

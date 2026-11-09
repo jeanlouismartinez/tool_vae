@@ -40,13 +40,17 @@ use tool_vae\local\attestation_manager;
 use tool_vae\local\backup;
 use tool_vae\local\carry_manager;
 use tool_vae\local\competency_gateway;
+use tool_vae\local\consent_manager;
 use tool_vae\local\coverage;
 use tool_vae\local\deposit_manager;
 use tool_vae\local\dossier_importer;
 use tool_vae\local\draft_manager;
+use tool_vae\local\positioning_screen;
 use tool_vae\local\presenter;
 use tool_vae\local\request_manager;
 use tool_vae\local\scope_manager;
+use tool_vae\local\situation_manager;
+use tool_vae\local\situation_screen;
 
 require_login();
 
@@ -89,8 +93,9 @@ $claims = $DB->get_records('tool_vae_evidence', ['candidateid' => $candidateid],
 
 // The coverage is the candidate's alone, on their own dossier - decided with the project owner on
 // 12 October 2026. Read by a manager or the direction, the same counts become a gauge on a person,
-// which is the verdict this plugin refuses to give.
-if ($isown && $claims) {
+// which is the verdict this plugin refuses to give. A session of "log in as" makes $USER the candidate while the
+// reader is somebody else: it is refused here as it is on the pathway page (decision of 3 November 2026).
+if ($isown && $claims && !\core\session\manager::is_loggedinas()) {
     echo presenter::coverage(coverage::for_candidate($candidateid));
 }
 
@@ -256,12 +261,24 @@ if (!$claims) {
     }
 }
 
+// The positionings of the structure (T-90, lot 3): the evaluation of each competency and the certification of each bloc, on the
+// tree of the records the candidate declared on. Read by whoever reads the dossier; never a validation, which the jury alone gives.
+echo positioning_screen::section($candidateid, $context);
+
 if ($isown) {
     echo $OUTPUT->single_button(
         new moodle_url('/admin/tool/vae/declare.php'),
         get_string('declareheading', 'tool_vae'),
         'get'
     );
+    // The pathway of the candidate (T-90): theirs alone, so only on their own dossier and not in a session of "log in as".
+    if (!\core\session\manager::is_loggedinas()) {
+        echo $OUTPUT->single_button(
+            new moodle_url('/admin/tool/vae/organisation.php'),
+            get_string('orgtabmine', 'tool_vae'),
+            'get'
+        );
+    }
 }
 
 if ($claims && access::can_export($candidateid)) {
@@ -289,6 +306,51 @@ if (
     echo $OUTPUT->single_button(
         new moodle_url('/admin/tool/vae/validation.php'),
         get_string('validationtitle', 'tool_vae'),
+        'get'
+    );
+}
+
+// The same preparation, read by whoever may view the dossier (D-1b-G), once the vaeiste has begun it.
+if (
+    $candidateid !== (int) $USER->id
+        && draft_manager::can_read_doctype($candidateid, draft_manager::DOCTYPE_VALIDATION)
+        && $DB->record_exists('tool_vae_draft', ['candidateid' => $candidateid, 'doctype' => draft_manager::DOCTYPE_VALIDATION])
+) {
+    echo $OUTPUT->single_button(
+        new moodle_url('/admin/tool/vae/validation.php', ['userid' => $candidateid]),
+        get_string('validationreadlink', 'tool_vae'),
+        'get'
+    );
+}
+
+// The work situations (lot 1b): the vaeiste's own, to write; read by whoever may read the preparation, once there is one.
+if ($candidateid === (int) $USER->id && situation_manager::can_write($candidateid)) {
+    echo $OUTPUT->single_button(
+        situation_screen::url($candidateid),
+        get_string('situationslink', 'tool_vae'),
+        'get'
+    );
+} else if (
+    $candidateid !== (int) $USER->id
+        && draft_manager::can_read_doctype($candidateid, draft_manager::DOCTYPE_VALIDATION)
+        && $DB->record_exists(situation_manager::TABLE, ['candidateid' => $candidateid])
+) {
+    echo $OUTPUT->single_button(
+        situation_screen::url($candidateid),
+        get_string('situationsreadlink', 'tool_vae'),
+        'get'
+    );
+}
+
+// The consent to annotations (lot 1b): the vaeiste's own, to give or take back, before any line; and whoever reads the
+// preparation (the same rule as situations.php, whose door is can_read_doctype). The administrator does not (MC-16).
+if (
+    consent_manager::can_manage($candidateid)
+        || draft_manager::can_read_doctype($candidateid, draft_manager::DOCTYPE_VALIDATION)
+) {
+    echo $OUTPUT->single_button(
+        new moodle_url('/admin/tool/vae/consent.php', ['userid' => $candidateid]),
+        get_string('consentlink', 'tool_vae'),
         'get'
     );
 }

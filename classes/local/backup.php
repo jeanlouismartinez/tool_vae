@@ -184,6 +184,11 @@ final class backup {
             // Made by the account that holds it.
             $ownerid,
             // The safety net of an uninstall keeps every saved section.
+            true,
+            // And every positioning of the structure: the backup is not a dossier of the vaeiste, it is the safety net.
+            true,
+            // And the work situations, whoever holds the backup: the export a third party takes follows the reading of the
+            // preparation (exporter::store()), the backup stays whole (decision of the project owner, 9 November 2026).
             true
         );
         $file->set_source(self::SOURCE_PREFIX . $personne);
@@ -203,6 +208,10 @@ final class backup {
     public static function save_all(int $ownerid): int {
         global $DB;
 
+        // Only the dossiers that hold a declaration: exporter::store() refuses the others (errorexportempty), so a vaeiste
+        // who only positioned themselves (lot 1a), only wrote work situations (lot 1b), or only wrote a journal, is NOT
+        // backed up here. Decided by the project owner for lot 1a (decision 1) and kept for lot 1b: the export of a dossier
+        // without a declaration is a decision of theirs, not of these lots. tests/situation_privacy_test.php says it.
         $candidates = $DB->get_fieldset_sql('SELECT DISTINCT candidateid FROM {tool_vae_evidence} ORDER BY candidateid');
         foreach ($candidates as $candidateid) {
             self::save((int) $candidateid, $ownerid, false);

@@ -1,0 +1,37 @@
+# Dépendances
+/node_modules/
+/vendor/
+
+# Construits
+/amd/build/
+*.min.js
+*.min.css
+
+# Environnement
+.env
+.env.*
+!.env.example
+config.local.php
+
+# Outils
+/.phpunit.result.cache
+/.php-cs-fixer.cache
+/moodle-plugin-ci.log
+
+# Systèmes
+.DS_Store
+Thumbs.db
+*~
+*.swp
+
+# Livraisons de session
+/_livraisons/
+
+# Jamais dans le plugin : videos et documents du guide (restent sur le poste du porteur)
+/docs/GUIDE-D-USAGE*.docx
+/docs/GUIDE-D-USAGE*.pdf
+*.webm
+*.mp4
+*.mov
+*.avi
+*.mkv

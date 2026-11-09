@@ -47,6 +47,19 @@ final class validation_catalog {
     /** @var int The most blocs a record may have for the preparation to go bloc by bloc (as faisabilite_catalog). */
     public const MAX_BLOCS = 12;
 
+    /**
+     * @var string The part that holds the text of a work situation (lot 1b). NOT A SECTION OF THE PREPARATION (D-1b-D):
+     *  sections() never lists it, it has no deposit, no PDF and no place in the document of validation. The catalogue knows
+     *  its address so that a draft of type validation can hold the text, one draft per situation, told apart by its slot.
+     */
+    public const PART_SITUATION = 'situation';
+
+    /** @var string The section code of a work situation: the record as a whole, the part `situation`. */
+    public const SITUATION_SECTION = '_situation';
+
+    /** @var int The most work situations a vaeiste writes on one record (spec 1b § 2). */
+    public const MAX_SITUATIONS = 30;
+
     /** @var array[] Structures already read in this request, by record code. */
     private static $structures = [];
 
@@ -152,10 +165,11 @@ final class validation_catalog {
             return null;
         }
         [, $rank, $part] = $matches;
-        if (!in_array($part, array_merge(self::PARTS, [self::SYNTHESIS]), true)) {
+        if (!in_array($part, array_merge(self::PARTS, [self::SYNTHESIS, self::PART_SITUATION]), true)) {
             return null;
         }
-        if ($part === self::SYNTHESIS && $rank !== '') {
+        // The synthesis and a work situation are written for the record as a whole, never under a bloc.
+        if (($part === self::SYNTHESIS || $part === self::PART_SITUATION) && $rank !== '') {
             return null;
         }
 
@@ -165,6 +179,9 @@ final class validation_catalog {
     /**
      * Whether a place can be written.
      *
+     * A work situation takes a slot from 1 to MAX_SITUATIONS on any imported record, with or without blocs (lot 1b); every
+     * other place takes slot 0 and follows the layout of the record.
+     *
      * @param string $fichecode
      * @param string $section
      * @param int $slot
@@ -173,10 +190,16 @@ final class validation_catalog {
     public static function valid_address(string $fichecode, string $section, int $slot): bool {
         $parsed = self::parse($section);
         $structure = self::structure($fichecode);
-        if ($slot !== 0 || $parsed === null || $structure === null) {
+        if ($parsed === null || $structure === null) {
             return false;
         }
         [$rank, $part] = $parsed;
+        if ($part === self::PART_SITUATION) {
+            return $slot >= 1 && $slot <= self::MAX_SITUATIONS;
+        }
+        if ($slot !== 0) {
+            return false;
+        }
         if ($part === self::SYNTHESIS) {
             return true;
         }
@@ -188,19 +211,23 @@ final class validation_catalog {
      * The name of a place, as the candidate reads it: "BC01 - Describe my activities".
      *
      * A place the record no longer holds - a bloc withdrawn from it - is named by its rank, with the words that say it
-     * has gone: what was written is shown, never hidden.
+     * has gone: what was written is shown, never hidden. A work situation is named by its slot: "Work situation 3".
      *
      * @param string $fichecode
      * @param string $section
+     * @param int $slot The slot of a work situation; 0 for every other place.
      * @return string
      */
-    public static function label(string $fichecode, string $section): string {
+    public static function label(string $fichecode, string $section, int $slot = 0): string {
         $parsed = self::parse($section);
         if ($parsed === null) {
             return $section;
         }
         [$rank, $part] = $parsed;
 
+        if ($part === self::PART_SITUATION) {
+            return get_string('validpart:situation', 'tool_vae', $slot);
+        }
         $name = get_string('validpart:' . $part, 'tool_vae');
         if ($rank === '') {
             return $name;

@@ -994,12 +994,18 @@ final class privacy_provider_test extends \advanced_testcase {
             'usermodified' => $this->candidate->id,
         ]);
 
+        $this->situation_rows($now);
+
         provider::export_user_data($this->approval($this->candidate, (int) $this->candidate->id));
         $writer = \core_privacy\local\request\writer::with_context(\context_user::instance($this->candidate->id));
         $claim = $writer->get_data([get_string('pluginname', 'tool_vae')])->claims[0];
         $section = $writer->get_data(
             [get_string('pluginname', 'tool_vae'), get_string('privacy:path:sections', 'tool_vae')]
         )->sections[0];
+        $situations = $writer->get_data(
+            [get_string('pluginname', 'tool_vae'), get_string('privacy:path:situations', 'tool_vae')]
+        );
+        $situation = $situations->situations[0];
 
         // The attestation the request was made on: the only entry that carries every date, whatever order they come in.
         $asked = array_values(array_filter(
@@ -1019,6 +1025,14 @@ final class privacy_provider_test extends \advanced_testcase {
             'tool_vae_draft' => [$section, [
                 'timecreated' => 'created', 'timemodified' => 'modified', 'workingat' => 'workingat',
             ]],
+            // Lot 1b: the seven tables of the work situations, each dated line where the export serves it.
+            'tool_vae_situation' => [$situation, ['timecreated' => 'created', 'timemodified' => 'modified']],
+            'tool_vae_sitversion' => [$situation['versions'][0]['snapshot'], ['timecreated' => 'taken']],
+            'tool_vae_sitetag' => [$situation['tags'][0], ['timecreated' => 'tagged']],
+            'tool_vae_slink' => [$situation['pieces'][0], ['timecreated' => 'linked', 'timeremoved' => 'unlinked']],
+            'tool_vae_spiece' => [$situations->pieces[0], ['timecreated' => 'addedat', 'timeremoved' => 'removedat']],
+            'tool_vae_consent' => [$situations->consents[0], ['importedat' => 'restored', 'timecreated' => 'written']],
+            'tool_vae_note' => [$situations->annotations[0], ['importedat' => 'restored', 'timecreated' => 'written']],
         ];
 
         $collection = provider::get_metadata(new \core_privacy\local\metadata\collection('tool_vae'));
@@ -1029,7 +1043,8 @@ final class privacy_provider_test extends \advanced_testcase {
             }
             [$entry, $keys] = $served[$item->get_name()];
             foreach (array_keys($item->get_privacy_fields()) as $field) {
-                if (!preg_match('/^(time[a-z]+|[a-z]+at|ficheupdated)$/', $field)) {
+                // A date: time*, *at, ficheupdated. textformat (lot 1b) ends in "at" and is a format, not a date.
+                if (!preg_match('/^(?!textformat$)(time[a-z]+|[a-z]+at|ficheupdated)$/', $field)) {
                     continue;
                 }
                 $this->assertArrayHasKey(
@@ -1045,7 +1060,63 @@ final class privacy_provider_test extends \advanced_testcase {
                 $checked++;
             }
         }
-        $this->assertSame(12, $checked, 'The three tables and their twelve dates.');
+        $this->assertSame(24, $checked, 'The three tables and their twelve dates, the seven of lot 1b and their twelve.');
+    }
+
+    /**
+     * One row in each of the seven tables of the work situations (lot 1b), for the candidate of setUp(), every date set.
+     *
+     * Written straight into the tables, as the draft above: what is tested is the export of the dates, not the writing.
+     *
+     * @param int $now
+     */
+    private function situation_rows(int $now): void {
+        global $DB;
+
+        $draftid = (int) $DB->insert_record('tool_vae_draft', (object) [
+            'uuid' => local\identity_map::generate_ulid(), 'candidateid' => $this->candidate->id, 'doctype' => 'validation',
+            'section' => '_situation', 'slot' => 1, 'fichecode' => 'RNCP36832', 'working' => null, 'workingat' => null,
+            'currentversion' => 1, 'timecreated' => $now, 'timemodified' => $now, 'usermodified' => $this->candidate->id,
+        ]);
+        $DB->insert_record('tool_vae_version', (object) [
+            'uuid' => local\identity_map::generate_ulid(), 'draftid' => $draftid, 'number' => 1, 'content' => 'Le texte.',
+            'contenthash' => hash('sha256', 'Le texte.'), 'authorid' => $this->candidate->id, 'note' => null,
+            'restoredfrom' => null, 'timecreated' => $now,
+        ]);
+        $situationid = (int) $DB->insert_record('tool_vae_situation', (object) [
+            'uuid' => local\identity_map::generate_ulid(), 'candidateid' => $this->candidate->id, 'fichecode' => 'RNCP36832',
+            'slot' => 1, 'draftid' => $draftid, 'title' => 'Une situation', 'periodstart' => $now - DAYSECS, 'periodend' => $now,
+            'setting' => 'EHPAD', 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+        $DB->insert_record('tool_vae_sitversion', (object) [
+            'situationid' => $situationid, 'number' => 1, 'title' => 'Une situation', 'periodstart' => $now - DAYSECS,
+            'periodend' => $now, 'setting' => 'EHPAD', 'tags' => 'C03', 'timecreated' => $now,
+        ]);
+        $DB->insert_record('tool_vae_sitetag', (object) [
+            'situationid' => $situationid, 'candidateid' => $this->candidate->id, 'fichecode' => 'RNCP36832',
+            'ficherang' => 'C03', 'timecreated' => $now,
+        ]);
+        $pieceid = (int) $DB->insert_record('tool_vae_spiece', (object) [
+            'uuid' => local\identity_map::generate_ulid(), 'candidateid' => $this->candidate->id, 'fichecode' => 'RNCP36832',
+            'kind' => 'link', 'nature' => 'other', 'title' => '', 'url' => null, 'timecreated' => $now - 10,
+            'timeremoved' => $now,
+        ]);
+        $DB->insert_record('tool_vae_slink', (object) [
+            'situationid' => $situationid, 'pieceid' => $pieceid, 'part' => 'Page 1', 'timecreated' => $now - 10,
+            'timeremoved' => $now,
+        ]);
+        $DB->insert_record('tool_vae_consent', (object) [
+            'uuid' => local\identity_map::generate_ulid(), 'candidateid' => $this->candidate->id, 'managerid' => null,
+            'manageruuid' => local\identity_map::generate_ulid(), 'state' => 'given', 'importedat' => $now,
+            'timecreated' => $now,
+        ]);
+        $DB->insert_record('tool_vae_note', (object) [
+            'uuid' => local\identity_map::generate_ulid(), 'candidateid' => $this->candidate->id, 'target' => 'situation',
+            'targetuuid' => local\identity_map::generate_ulid(), 'fichecode' => 'RNCP36832', 'slot' => 1, 'ficherang' => '',
+            'authorid' => null, 'authoruuid' => local\identity_map::generate_ulid(), 'text' => 'Une annotation.',
+            'textformat' => FORMAT_PLAIN, 'state' => 'active', 'withdraws' => null, 'notehash' => hash('sha256', 'n'),
+            'importedat' => $now, 'timecreated' => $now,
+        ]);
     }
 
     /**

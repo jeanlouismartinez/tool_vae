@@ -37,6 +37,7 @@ use tool_vae\local\draft_manager;
 use tool_vae\local\faisabilite_catalog;
 use tool_vae\local\faisabilite_fields;
 use tool_vae\local\validation_catalog;
+use tool_vae\local\whereami_panel;
 
 require_login();
 
@@ -48,6 +49,12 @@ $fichecode = optional_param('fiche', '', PARAM_ALPHANUMEXT);
 
 $candidateid = (int) $USER->id;
 draft_manager::require_can_write($candidateid);
+
+// A work situation (lot 1b) is written from its own screen, through situation_manager, which keeps with each version the
+// snapshot of its title, period, setting and tags: this page never opens its draft, whatever draft_manager would say.
+if ($doctype === draft_manager::DOCTYPE_VALIDATION && $sectioncode === validation_catalog::SITUATION_SECTION) {
+    throw new moodle_exception('errordraftsection', 'tool_vae');
+}
 
 // A section of the dossier de faisabilité that the catalogue lists but does not open (none today).
 if (
@@ -332,6 +339,12 @@ $status = (int) $draft->currentversion > 0
 echo html_writer::tag('p', s($status));
 echo html_writer::tag('p', html_writer::link($history, get_string('historylink', 'tool_vae')));
 echo html_writer::tag('p', html_writer::link($backurl, $backwords));
+
+// The part "lier": the situations the vaeiste tagged on this bloc or under it, in reading, to link from (lot 1b).
+$parsed = $isvalidation ? validation_catalog::parse($sectioncode) : null;
+if ($parsed !== null && $parsed[1] === 'lier') {
+    echo whereami_panel::tagged_on_bloc($candidateid, $fichecode, $parsed[0]);
+}
 
 $form->display();
 

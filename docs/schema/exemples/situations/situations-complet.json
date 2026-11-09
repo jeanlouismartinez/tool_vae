@@ -1,0 +1,194 @@
+{
+  "avertissement": "Situations de travail du vaeiste, ni attestees ni validees : seul le jury valide, hors de la plateforme.",
+  "officiel": false,
+  "situations": [
+    {
+      "identifiant": "01JC8M3Q5R7T9V2X4Z6B8D0S1A",
+      "fiche": "RNCP40692",
+      "emplacement": 1,
+      "intitule": "Accueil du matin, revu",
+      "periode_debut": "2025-09-01T00:00:00Z",
+      "periode_fin": "2025-10-01T00:00:00Z",
+      "cadre": "EHPAD d'exemple, unite du rez-de-chaussee",
+      "etiquettes": [
+        "C11"
+      ],
+      "versions": [
+        {
+          "numero": 1,
+          "contenu": "Premiere version du texte de la situation.",
+          "empreinte": "1111111111111111111111111111111111111111111111111111111111111111",
+          "ecrit_le": "2026-11-02T09:30:00Z",
+          "instantane": {
+            "intitule": "Accueil du matin",
+            "periode_debut": "2025-09-01T00:00:00Z",
+            "periode_fin": "2025-10-01T00:00:00Z",
+            "cadre": "EHPAD d'exemple, unite du rez-de-chaussee",
+            "etiquettes": [
+              "C11",
+              "C12"
+            ]
+          }
+        },
+        {
+          "numero": 2,
+          "contenu": "Deuxieme version, **plus longue**.\nSur deux lignes.",
+          "empreinte": "2222222222222222222222222222222222222222222222222222222222222222",
+          "note": "Relue avec ma collegue.",
+          "ecrit_le": "2026-11-03T14:00:00Z",
+          "instantane": {
+            "intitule": "Accueil du matin",
+            "periode_debut": "2025-09-01T00:00:00Z",
+            "periode_fin": "2025-10-01T00:00:00Z",
+            "cadre": "EHPAD d'exemple, unite du rez-de-chaussee",
+            "etiquettes": [
+              "C11",
+              "C12"
+            ]
+          }
+        },
+        {
+          "numero": 3,
+          "contenu": "Premiere version du texte de la situation.",
+          "empreinte": "1111111111111111111111111111111111111111111111111111111111111111",
+          "restauree_de": 1,
+          "ecrit_le": "2026-11-05T10:00:00Z",
+          "instantane": {
+            "intitule": "Accueil du matin, revu",
+            "periode_debut": "2025-09-01T00:00:00Z",
+            "periode_fin": "2025-10-01T00:00:00Z",
+            "cadre": "EHPAD d'exemple, unite du rez-de-chaussee",
+            "etiquettes": [
+              "C11"
+            ]
+          }
+        }
+      ],
+      "brouillon": "Un brouillon en cours, pas encore une version.",
+      "pieces": [
+        {
+          "piece": "01JC8M3Q5R7T9V2X4Z6B8D0P1C",
+          "partie": "Page 2",
+          "ajoutee_le": "2026-11-05T10:05:00Z"
+        },
+        {
+          "piece": "01JC8M3Q5R7T9V2X4Z6B8D0P2D",
+          "partie": "",
+          "ajoutee_le": "2026-11-05T10:06:00Z",
+          "retiree_le": "2026-11-06T08:00:00Z"
+        }
+      ]
+    },
+    {
+      "identifiant": "01JC8M3Q5R7T9V2X4Z6B8D0S2B",
+      "fiche": "RNCP40692",
+      "emplacement": 2,
+      "intitule": "Transmissions",
+      "cadre": "",
+      "etiquettes": [],
+      "versions": [],
+      "pieces": [
+        {
+          "piece": "01JC8M3Q5R7T9V2X4Z6B8D0P1C",
+          "partie": "Page 1",
+          "ajoutee_le": "2026-11-05T10:07:00Z"
+        }
+      ]
+    }
+  ],
+  "pieces": [
+    {
+      "identifiant": "01JC8M3Q5R7T9V2X4Z6B8D0P1C",
+      "fiche": "RNCP40692",
+      "genre": "fichier",
+      "nature": "writing",
+      "intitule": "Mon ecrit professionnel",
+      "ajoutee_le": "2026-11-05T10:05:00Z",
+      "type": "application/pdf",
+      "taille": 74,
+      "sha256": "fe7b6c2c342f32bb3c14cc83d73a1b1f566ed50c650c692f6128a5f486eaa919",
+      "fichier": "pieces-situations/01JC8M3Q5R7T9V2X4Z6B8D0P1C.pdf"
+    },
+    {
+      "identifiant": "01JC8M3Q5R7T9V2X4Z6B8D0P2D",
+      "fiche": "RNCP40692",
+      "genre": "lien",
+      "nature": "other",
+      "intitule": "Le site du service",
+      "ajoutee_le": "2026-11-05T10:06:00Z",
+      "adresse": "https://exemple.test/service"
+    }
+  ],
+  "annotations": [
+    {
+      "identifiant": "01JC8M3Q5R7T9V2X4Z6B8D0N1E",
+      "cible": "situation",
+      "cible_identifiant": "01JC8M3Q5R7T9V2X4Z6B8D0S1A",
+      "fiche": "RNCP40692",
+      "emplacement": 1,
+      "rang": "",
+      "auteur": "01JC8M3Q5R7T9V2X4Z6B8D0A1J",
+      "texte": "Une annotation sur la premiere situation.",
+      "format": "texte",
+      "etat": "active",
+      "empreinte": "3333333333333333333333333333333333333333333333333333333333333333",
+      "ecrit_le": "2026-11-06T09:00:00Z"
+    },
+    {
+      "identifiant": "01JC8M3Q5R7T9V2X4Z6B8D0N2F",
+      "cible": "autopositionnement",
+      "fiche": "RNCP40692",
+      "emplacement": 0,
+      "rang": "C11",
+      "auteur": "01JC8M3Q5R7T9V2X4Z6B8D0A1J",
+      "texte": "**Sur l'element** C11.",
+      "format": "markdown",
+      "etat": "active",
+      "empreinte": "4444444444444444444444444444444444444444444444444444444444444444",
+      "ecrit_le": "2026-11-06T09:05:00Z"
+    },
+    {
+      "identifiant": "01JC8M3Q5R7T9V2X4Z6B8D0N3G",
+      "cible": "situation",
+      "cible_identifiant": "01JC8M3Q5R7T9V2X4Z6B8D0S1A",
+      "fiche": "RNCP40692",
+      "emplacement": 1,
+      "rang": "",
+      "auteur": "01JC8M3Q5R7T9V2X4Z6B8D0A1J",
+      "texte": "Une annotation a retirer.",
+      "format": "texte",
+      "etat": "active",
+      "empreinte": "5555555555555555555555555555555555555555555555555555555555555555",
+      "ecrit_le": "2026-11-06T09:10:00Z"
+    },
+    {
+      "identifiant": "01JC8M3Q5R7T9V2X4Z6B8D0N4H",
+      "cible": "situation",
+      "cible_identifiant": "01JC8M3Q5R7T9V2X4Z6B8D0S1A",
+      "fiche": "RNCP40692",
+      "emplacement": 1,
+      "rang": "",
+      "auteur": "01JC8M3Q5R7T9V2X4Z6B8D0A1J",
+      "texte": "",
+      "format": "texte",
+      "etat": "retiree",
+      "retire": "01JC8M3Q5R7T9V2X4Z6B8D0N3G",
+      "empreinte": "6666666666666666666666666666666666666666666666666666666666666666",
+      "ecrit_le": "2026-11-06T09:15:00Z"
+    }
+  ],
+  "accords": [
+    {
+      "identifiant": "01JC8M3Q5R7T9V2X4Z6B8D0A2K",
+      "responsable": "01JC8M3Q5R7T9V2X4Z6B8D0A1J",
+      "etat": "donne",
+      "date": "2026-11-06T08:50:00Z"
+    },
+    {
+      "identifiant": "01JC8M3Q5R7T9V2X4Z6B8D0A3M",
+      "responsable": "01JC8M3Q5R7T9V2X4Z6B8D0A1J",
+      "etat": "retire",
+      "date": "2026-11-07T18:00:00Z"
+    }
+  ]
+}

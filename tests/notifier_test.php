@@ -1011,4 +1011,379 @@ final class notifier_test extends \advanced_testcase {
             $this->assertStringNotContainsString(fullname($this->manager), $text, $field);
         }
     }
+
+    /**
+     * The record RNCP100 (a bloc BC01 holding C01), declared on by the candidate: what a positioning needs to stand on.
+     */
+    private function positioning_ground(): void {
+        $plugin = $this->getDataGenerator()->get_plugin_generator('tool_vae');
+        $plugin->create_source(['fichecode' => 'RNCP100', 'ficherang' => 'BC01', 'shortname' => 'Bloc 1']);
+        $plugin->create_competency([
+            'fichecode' => 'RNCP100', 'ficherang' => 'C01', 'shortname' => 'Competence 1', 'bloc' => 'BC01',
+        ]);
+        $plugin->create_declaration([
+            'userid' => $this->candidate->id, 'fichecode' => 'RNCP100', 'ficherang' => 'C01',
+            'situation' => 'Une situation vecue en etablissement.',
+        ]);
+        assign_capability('tool/vae:evaluate', CAP_ALLOW, $this->managerrole, \context_system::instance()->id, true);
+        accesslib_clear_all_caches_for_unit_testing();
+    }
+
+    /**
+     * An evaluation is told to the candidate: that a line was added, not its status, not its reason, not its author.
+     */
+    public function test_an_evaluation_is_told_to_the_candidate_without_status_reason_or_author(): void {
+        $this->positioning_ground();
+        $this->setUser($this->manager);
+
+        (new \tool_vae\local\evaluation_manager())->write(
+            (int) $this->candidate->id,
+            'RNCP100',
+            'C01',
+            'sufficient',
+            'Motif-Secret sur Mme Lambert.'
+        );
+        $this->deliver_all();
+
+        $messages = $this->caught(notifier::POSITIONING_RECORDED);
+        $this->assertCount(1, $messages);
+        $message = reset($messages);
+        $this->assertEquals($this->candidate->id, $message->useridto);
+        foreach (self::text_of($message) as $field => $text) {
+            $this->assertStringNotContainsString('Motif-Secret', $text, $field);
+            $this->assertStringNotContainsString('Lambert', $text, $field);
+            $this->assertStringNotContainsString(fullname($this->manager), $text, $field);
+            $this->assertStringNotContainsString(get_string('evalstatussufficient', 'tool_vae'), $text, $field);
+        }
+        $this->assertStringContainsString(
+            'It is not a validation',
+            self::text_of($message)['fullmessage'],
+            'It says, in the message, that this is not a validation.'
+        );
+    }
+
+    /**
+     * A certification is told the same way, and nobody but the candidate is told.
+     */
+    public function test_a_certification_is_told_to_the_candidate_only(): void {
+        $this->positioning_ground();
+        $generator = $this->getDataGenerator();
+        $system = \context_system::instance()->id;
+        $direction = $generator->create_user(['firstname' => 'Dana', 'lastname' => 'Direction']);
+        $role = $generator->create_role();
+        foreach (['tool/vae:viewany', 'tool/vae:certify'] as $capability) {
+            assign_capability($capability, CAP_ALLOW, $role, $system, true);
+        }
+        role_assign($role, $direction->id, $system);
+        accesslib_clear_all_caches_for_unit_testing();
+        $this->setUser($direction);
+
+        (new \tool_vae\local\certification_manager())->write(
+            (int) $this->candidate->id,
+            'RNCP100',
+            'BC01',
+            'certified',
+            'Motif-Secret de la direction.',
+            userdate(time(), '%Y-%m-%d', 99, false),
+            'Alerte-Secrete.'
+        );
+        $this->deliver_all();
+
+        $messages = $this->caught(notifier::POSITIONING_RECORDED);
+        $this->assertCount(1, $messages, 'One message, for the candidate; neither the manager nor the direction is told.');
+        $message = reset($messages);
+        $this->assertEquals($this->candidate->id, $message->useridto);
+        foreach (self::text_of($message) as $field => $text) {
+            $this->assertStringNotContainsString('Motif-Secret', $text, $field);
+            $this->assertStringNotContainsString('Alerte-Secrete', $text, $field);
+            $this->assertStringNotContainsString('Direction', $text, $field);
+        }
+    }
+
+    /**
+     * A candidate who may no longer open their dossier is not sent a link to it.
+     */
+    public function test_a_positioning_is_not_told_to_a_candidate_who_may_not_open_their_dossier(): void {
+        $this->positioning_ground();
+        $this->setUser($this->manager);
+        (new \tool_vae\local\evaluation_manager())->write((int) $this->candidate->id, 'RNCP100', 'C01', 'inproof', 'Constate.');
+        assign_capability(
+            'tool/vae:viewown',
+            CAP_PROHIBIT,
+            $this->candidaterole,
+            \context_user::instance($this->candidate->id)->id,
+            true
+        );
+        accesslib_clear_all_caches_for_unit_testing();
+
+        $this->expectOutputRegex(self::NOT_SENT);
+        $this->deliver_all();
+
+        $this->assertSame([], $this->caught(notifier::POSITIONING_RECORDED));
+    }
+
+    /**
+     * What an annotation needs to stand on (lot 1b): the record RNCP100, the preparation open, the candidate writing their
+     * preparation, the manager holding annotate, the consent of the candidate to the manager, and one work situation.
+     *
+     * The consent queues its own message; the tests of the annotations read only theirs.
+     *
+     * @return \stdClass The situation.
+     */
+    private function annotation_ground(): \stdClass {
+        \tool_vae\local\validation_catalog::reset();
+        set_config('validationopen', 1, 'tool_vae');
+        $plugin = $this->getDataGenerator()->get_plugin_generator('tool_vae');
+        $plugin->create_source(['fichecode' => 'RNCP100', 'ficherang' => 'BC01', 'shortname' => 'Bloc 1']);
+        $plugin->create_competency([
+            'fichecode' => 'RNCP100', 'ficherang' => 'C01', 'shortname' => 'Competence 1', 'bloc' => 'BC01',
+        ]);
+        $system = \context_system::instance()->id;
+        assign_capability('tool/vae:draftown', CAP_ALLOW, $this->candidaterole, $system, true);
+        assign_capability('tool/vae:annotate', CAP_ALLOW, $this->managerrole, $system, true);
+        accesslib_clear_all_caches_for_unit_testing();
+
+        $plugin->create_consent(['userid' => $this->candidate->id, 'managerid' => $this->manager->id]);
+
+        return $plugin->create_situation([
+            'userid' => $this->candidate->id, 'fichecode' => 'RNCP100', 'title' => 'Titre-Secret Lambert', 'tags' => 'C01',
+            'text' => self::SITUATION,
+        ]);
+    }
+
+    /**
+     * Annotate the situation as the manager.
+     *
+     * @param \stdClass $situation
+     * @param string $text
+     * @return \stdClass The row of tool_vae_note.
+     */
+    private function annotate(\stdClass $situation, string $text = 'Annotation-Secrete sur Mme Lambert.'): \stdClass {
+        return $this->getDataGenerator()->get_plugin_generator('tool_vae')->create_note([
+            'authorid' => $this->manager->id, 'userid' => $this->candidate->id, 'fichecode' => 'RNCP100',
+            'slot' => (int) $situation->slot, 'text' => $text,
+        ]);
+    }
+
+    /**
+     * An annotation is told to the vaeiste, and to nobody else: that one was written, never its text, its author or the
+     * title of the situation; and that it is not a validation.
+     */
+    public function test_an_annotation_tells_the_vaeiste_without_its_text(): void {
+        $situation = $this->annotation_ground();
+        $this->annotate($situation);
+
+        $this->assertCount(1, $this->queued(notifier::NOTE_ADDED));
+        $this->deliver_all();
+
+        $messages = $this->caught(notifier::NOTE_ADDED);
+        $this->assertCount(1, $messages, 'One message, for the vaeiste.');
+        $message = reset($messages);
+        $this->assertEquals($this->candidate->id, $message->useridto);
+        foreach (self::text_of($message) as $field => $text) {
+            $this->assertStringNotContainsString('Annotation-Secrete', $text, $field);
+            $this->assertStringNotContainsString('Lambert', $text, $field);
+            $this->assertStringNotContainsString('Titre-Secret', $text, $field);
+            $this->assertStringNotContainsString(fullname($this->manager), $text, $field);
+            $this->assertStringNotContainsString('Benali', $text, $field);
+        }
+        $this->assertStringContainsString(
+            'It is not a validation',
+            self::text_of($message)['fullmessage'],
+            'It says, in the message, that an annotation is not a validation.'
+        );
+        $task = $this->queued(notifier::NOTE_ADDED);
+        $this->assertSame([], $task, 'Delivered once, then gone from the queue.');
+    }
+
+    /**
+     * Withdrawing an annotation tells nobody: the line of withdrawal queues nothing, and the vaeiste told of the annotation
+     * is not told again.
+     */
+    public function test_a_withdrawn_annotation_is_not_told(): void {
+        $situation = $this->annotation_ground();
+        $note = $this->annotate($situation);
+        $this->deliver_all();
+        $this->assertCount(1, $this->caught(notifier::NOTE_ADDED));
+
+        $this->setUser($this->manager);
+        (new \tool_vae\local\note_manager())->withdraw((int) $note->id);
+
+        $this->assertSame([], $this->queued(notifier::NOTE_ADDED), 'A withdrawal queues no message.');
+        $this->deliver_all();
+        $this->assertCount(1, $this->caught(notifier::NOTE_ADDED), 'Nobody is told of the withdrawal.');
+    }
+
+    /**
+     * An annotation withdrawn, or erased, between the event and cron is not told: deliver() reads it again at sending.
+     */
+    public function test_an_annotation_retired_before_the_cron_runs_is_not_told(): void {
+        global $DB;
+
+        $situation = $this->annotation_ground();
+        $withdrawn = $this->annotate($situation, 'Premiere annotation.');
+        $this->setUser($this->manager);
+        (new \tool_vae\local\note_manager())->withdraw((int) $withdrawn->id);
+        $erased = $this->annotate($situation, 'Seconde annotation.');
+        $DB->delete_records('tool_vae_note', ['id' => $erased->id]);
+        $this->assertCount(2, $this->queued(notifier::NOTE_ADDED));
+
+        $this->expectOutputRegex(self::NOT_SENT);
+        $this->deliver_all();
+
+        $this->assertSame([], $this->caught(notifier::NOTE_ADDED));
+    }
+
+    /**
+     * A vaeiste who may no longer open their dossier is not told of an annotation, nor sent a link to it.
+     */
+    public function test_an_annotation_is_not_told_to_a_vaeiste_who_may_not_open_their_dossier(): void {
+        $situation = $this->annotation_ground();
+        $this->annotate($situation);
+        assign_capability(
+            'tool/vae:viewown',
+            CAP_PROHIBIT,
+            $this->candidaterole,
+            \context_user::instance($this->candidate->id)->id,
+            true
+        );
+        accesslib_clear_all_caches_for_unit_testing();
+
+        $this->expectOutputRegex(self::NOT_SENT);
+        $this->deliver_all();
+
+        $this->assertSame([], $this->caught(notifier::NOTE_ADDED));
+    }
+
+    /**
+     * A consent is told to the person it names, with the vaeiste's name; taking it back tells nobody.
+     */
+    public function test_a_consent_tells_the_manager_and_a_withdrawal_tells_nobody(): void {
+        $this->annotation_ground();
+        $this->assertCount(1, $this->queued(notifier::CONSENT_GIVEN));
+        $this->deliver_all();
+
+        $messages = $this->caught(notifier::CONSENT_GIVEN);
+        $this->assertCount(1, $messages, 'One message, for the manager named.');
+        $message = reset($messages);
+        $this->assertEquals($this->manager->id, $message->useridto);
+        $this->assertStringContainsString(fullname($this->candidate), self::text_of($message)['fullmessage']);
+        foreach (self::text_of($message) as $field => $text) {
+            $this->assertStringNotContainsString('Lambert', $text, $field);
+            $this->assertStringNotContainsString('Titre-Secret', $text, $field);
+        }
+
+        $this->getDataGenerator()->get_plugin_generator('tool_vae')->create_consent([
+            'userid' => $this->candidate->id, 'managerid' => $this->manager->id, 'state' => 'withdrawn',
+        ]);
+        $this->assertSame([], $this->queued(notifier::CONSENT_GIVEN), 'A withdrawal queues no message.');
+        $this->deliver_all();
+        $this->assertCount(1, $this->caught(notifier::CONSENT_GIVEN), 'Nobody is told of the withdrawal.');
+    }
+
+    /**
+     * A consent taken back between the event and cron is not told; neither is one whose manager no longer follows the
+     * vaeiste, nor holds annotate, by then.
+     */
+    public function test_a_consent_retired_before_the_cron_runs_is_not_told(): void {
+        $plugin = $this->getDataGenerator()->get_plugin_generator('tool_vae');
+        $this->annotation_ground();
+        $plugin->create_consent([
+            'userid' => $this->candidate->id, 'managerid' => $this->manager->id, 'state' => 'withdrawn',
+        ]);
+        $this->assertCount(1, $this->queued(notifier::CONSENT_GIVEN));
+
+        $this->expectOutputRegex(self::NOT_SENT);
+        $this->deliver_all();
+        $this->assertSame([], $this->caught(notifier::CONSENT_GIVEN), 'Taken back before cron.');
+
+        // Given again, then the manager no longer follows the vaeiste - viewassigned prohibited in the vaeiste's context -
+        // while still holding annotate there: the consent stands, the message does not go. The following alone decides.
+        $usercontext = \context_user::instance($this->candidate->id);
+        $plugin->create_consent(['userid' => $this->candidate->id, 'managerid' => $this->manager->id]);
+        assign_capability('tool/vae:viewassigned', CAP_PROHIBIT, $this->managerrole, $usercontext->id, true);
+        accesslib_clear_all_caches_for_unit_testing();
+        $this->assertTrue(\tool_vae\local\consent_manager::stands((int) $this->candidate->id, (int) $this->manager->id));
+        $this->assertFalse(\tool_vae\local\access::follows((int) $this->candidate->id, (int) $this->manager->id));
+        $this->assertTrue(has_capability('tool/vae:annotate', $usercontext, $this->manager->id), 'Still holds annotate.');
+        $this->deliver_all();
+        $this->assertSame([], $this->caught(notifier::CONSENT_GIVEN), 'No longer following by cron.');
+
+        // Given again to a manager who follows but lost annotate by cron.
+        unassign_capability('tool/vae:viewassigned', $this->managerrole, $usercontext->id);
+        accesslib_clear_all_caches_for_unit_testing();
+        $plugin->create_consent([
+            'userid' => $this->candidate->id, 'managerid' => $this->manager->id, 'state' => 'withdrawn',
+        ]);
+        $plugin->create_consent(['userid' => $this->candidate->id, 'managerid' => $this->manager->id]);
+        assign_capability(
+            'tool/vae:annotate',
+            CAP_PROHIBIT,
+            $this->managerrole,
+            \context_user::instance($this->candidate->id)->id,
+            true
+        );
+        accesslib_clear_all_caches_for_unit_testing();
+        $this->deliver_all();
+        $this->assertSame([], $this->caught(notifier::CONSENT_GIVEN), 'No longer holding annotate by cron.');
+    }
+
+    /**
+     * An annotation on a node of the self-positioning is told to the vaeiste the same way: neither its text nor its author.
+     */
+    public function test_an_annotation_on_the_self_positioning_tells_the_vaeiste_without_its_text(): void {
+        $this->annotation_ground();
+        $this->getDataGenerator()->get_plugin_generator('tool_vae')->create_note([
+            'authorid' => $this->manager->id, 'userid' => $this->candidate->id, 'fichecode' => 'RNCP100',
+            'target' => 'selfpos', 'slot' => 0, 'ficherang' => 'C01', 'text' => 'Noeud-Secret sur Mme Lambert.',
+        ]);
+        $this->deliver_all();
+
+        $messages = $this->caught(notifier::NOTE_ADDED);
+        $this->assertCount(1, $messages, 'One message, for the vaeiste.');
+        $message = reset($messages);
+        $this->assertEquals($this->candidate->id, $message->useridto);
+        foreach (self::text_of($message) as $field => $text) {
+            $this->assertStringNotContainsString('Noeud-Secret', $text, $field);
+            $this->assertStringNotContainsString('Lambert', $text, $field);
+            $this->assertStringNotContainsString(fullname($this->manager), $text, $field);
+        }
+    }
+
+    /**
+     * A consent given, taken back and given again before cron is told once: the message of a line goes only while that line
+     * is still the latest of the couple written on this site.
+     */
+    public function test_a_consent_given_again_before_the_cron_runs_is_told_once(): void {
+        $plugin = $this->getDataGenerator()->get_plugin_generator('tool_vae');
+        $this->annotation_ground();
+        $plugin->create_consent([
+            'userid' => $this->candidate->id, 'managerid' => $this->manager->id, 'state' => 'withdrawn',
+        ]);
+        $plugin->create_consent(['userid' => $this->candidate->id, 'managerid' => $this->manager->id]);
+        $this->assertCount(2, $this->queued(notifier::CONSENT_GIVEN));
+
+        $this->expectOutputRegex(self::NOT_SENT);
+        $this->deliver_all();
+
+        $messages = $this->caught(notifier::CONSENT_GIVEN);
+        $this->assertCount(1, $messages, 'One consent standing, one message.');
+        $this->assertEquals($this->manager->id, reset($messages)->useridto);
+    }
+
+    /**
+     * A consent of a vaeiste suspended by cron is not told: their name is not sent about an account that is shut.
+     */
+    public function test_a_consent_of_a_suspended_vaeiste_is_not_told(): void {
+        global $DB;
+
+        $this->annotation_ground();
+        $DB->set_field('user', 'suspended', 1, ['id' => $this->candidate->id]);
+        \core\session\manager::destroy_user_sessions($this->candidate->id);
+
+        $this->expectOutputRegex(self::NOT_SENT);
+        $this->deliver_all();
+
+        $this->assertSame([], $this->caught(notifier::CONSENT_GIVEN));
+    }
 }

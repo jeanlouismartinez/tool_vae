@@ -35,6 +35,7 @@ admin_externalpage_setup('toolvae_pending');
 require_capability('tool/vae:viewany', context_system::instance());
 
 $days = min(pending_report::MAX_DAYS, max(0, optional_param('days', 0, PARAM_INT)));
+$unreached = optional_param('unreached', 0, PARAM_BOOL);
 
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('pendingheading', 'tool_vae'));
@@ -45,6 +46,10 @@ $form = html_writer::tag('label', s(get_string('pendingdays', 'tool_vae')), ['fo
         'type' => 'number', 'name' => 'days', 'id' => 'pendingdays', 'min' => 0,
         'max' => pending_report::MAX_DAYS, 'value' => $days,
     ])
+    . ' ' . html_writer::empty_tag('input', [
+        'type' => 'checkbox', 'name' => 'unreached', 'id' => 'pendingunreached', 'value' => 1,
+    ] + ($unreached ? ['checked' => 'checked'] : []))
+    . ' ' . html_writer::tag('label', s(get_string('pendingunreached', 'tool_vae')), ['for' => 'pendingunreached'])
     . ' ' . html_writer::empty_tag('input', [
         'type' => 'submit', 'class' => 'btn btn-secondary', 'value' => get_string('pendingshow', 'tool_vae'),
     ]);
@@ -58,6 +63,17 @@ if (!$groups) {
     die();
 }
 
+// How many managers each of these candidates' declarations would be announced to: a number, never a name.
+$reach = pending_report::reachable(array_keys($groups));
+if ($unreached) {
+    $groups = array_filter($groups, fn($candidateid) => $reach[$candidateid] === 0, ARRAY_FILTER_USE_KEY);
+    if (!$groups) {
+        echo html_writer::tag('p', s(get_string('pendingnoneunreached', 'tool_vae')));
+        echo $OUTPUT->footer();
+        die();
+    }
+}
+
 $users = $DB->get_records_list('user', 'id', array_keys($groups));
 $table = new html_table();
 $table->attributes['class'] = 'generaltable tool-vae-pending';
@@ -66,6 +82,7 @@ $table->head = [
     get_string('pendingcolcount', 'tool_vae'),
     get_string('pendingcololdest', 'tool_vae'),
     get_string('pendingcoldays', 'tool_vae'),
+    get_string('pendingcolreach', 'tool_vae'),
 ];
 $now = time();
 // The oldest first: what has waited longest comes first.
@@ -78,6 +95,7 @@ foreach ($groups as $candidateid => $group) {
         (int) $group['count'],
         s(display_date::format((int) $group['oldest'], get_string('strftimedate', 'langconfig'))),
         (int) floor(($now - $group['oldest']) / DAYSECS),
+        (int) $reach[$candidateid],
     ];
 }
 echo html_writer::table($table);

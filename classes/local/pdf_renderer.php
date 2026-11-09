@@ -72,6 +72,8 @@ final class pdf_renderer {
      *                        them (T-13): a list, never an address.
      * @param array $scope The competencies the candidate says are outside their activity, as hors_activite.json writes them
      *                     (T-42); empty when there are none.
+     * @param array $positioning The positionings of the structure, as positionnement.json writes them (T-90, lot 3); empty
+     *                           when there are none. Never a validation.
      * @return string
      */
     public static function render(
@@ -81,7 +83,8 @@ final class pdf_renderer {
         array $rubriques = [],
         array $validation = [],
         array $pieces = [],
-        array $scope = []
+        array $scope = [],
+        array $positioning = []
     ): string {
         global $CFG;
         require_once($CFG->libdir . '/pdflib.php');
@@ -94,13 +97,15 @@ final class pdf_renderer {
         $pdf->setDocCreationTimestamp($exported);
         $pdf->setDocModificationTimestamp($exported);
         $pdf->setCreator($manifest['produit_par']['composant'] . ' ' . $manifest['produit_par']['version_composant']);
-        $pdf->setTitle(get_string('exportpdftitle', 'tool_vae', $manifest['candidat']['nom']));
+        $pdf->setTitle(get_string(self::title_string($manifest), 'tool_vae', $manifest['candidat']['nom']));
         $pdf->setMargins(20, 20, 20);
         // Room at the foot of every page for the lines written below.
         $pdf->setAutoPageBreak(true, 30);
         $pdf->setFont(self::FONT, '', 10);
         $pdf->AddPage();
-        foreach (self::chunks($manifest, $preuves, $referentiel, $rubriques, $validation, $pieces, $scope) as $chunk) {
+        foreach (
+            self::chunks($manifest, $preuves, $referentiel, $rubriques, $validation, $pieces, $scope, $positioning) as $chunk
+        ) {
             if (!$chunk['together']) {
                 $pdf->writeHTML($chunk['html']);
                 continue;
@@ -167,6 +172,7 @@ final class pdf_renderer {
      * @param array $validation See render().
      * @param array[] $pieces See render().
      * @param array $scope See render().
+     * @param array $positioning See render().
      * @return string
      */
     public static function html(
@@ -176,9 +182,10 @@ final class pdf_renderer {
         array $rubriques = [],
         array $validation = [],
         array $pieces = [],
-        array $scope = []
+        array $scope = [],
+        array $positioning = []
     ): string {
-        $chunks = self::chunks($manifest, $preuves, $referentiel, $rubriques, $validation, $pieces, $scope);
+        $chunks = self::chunks($manifest, $preuves, $referentiel, $rubriques, $validation, $pieces, $scope, $positioning);
 
         return implode('', array_column($chunks, 'html'));
     }
@@ -197,6 +204,7 @@ final class pdf_renderer {
      * @param array $validation See render().
      * @param array[] $pieces See render().
      * @param array $scope See render().
+     * @param array $positioning See render().
      * @return array[] Each ['html' => string, 'together' => bool], in reading order.
      */
     private static function chunks(
@@ -206,12 +214,13 @@ final class pdf_renderer {
         array $rubriques = [],
         array $validation = [],
         array $pieces = [],
-        array $scope = []
+        array $scope = [],
+        array $positioning = []
     ): array {
         global $CFG, $SITE;
 
         $producer = $manifest['produit_par'];
-        $head = \html_writer::tag('h1', s(get_string('exportpdftitle', 'tool_vae', $manifest['candidat']['nom'])));
+        $head = \html_writer::tag('h1', s(get_string(self::title_string($manifest), 'tool_vae', $manifest['candidat']['nom'])));
         $head .= self::rows([
             get_string('exportpdfarchive', 'tool_vae') => s($manifest['archive']),
             get_string('exportpdfexportedon', 'tool_vae')
@@ -306,6 +315,41 @@ final class pdf_renderer {
             ];
         }
 
+        // The positionings of the structure (T-90, lot 3): the lines of evaluation and of certification, the one that stands
+        // marked, under the sentence that says it is not a validation.
+        if (!empty($positioning['evaluations']) || !empty($positioning['certifications'])) {
+            $chunks[] = [
+                'html' => \html_writer::tag('h2', s(get_string('positioningdossierheading', 'tool_vae')))
+                    . \html_writer::tag('p', \html_writer::tag('em', s($positioning['avertissement']))),
+                'together' => false,
+            ];
+            $kinds = [
+                'evaluations' => ['eval', array_flip(positioning_archive::EVAL_STATUS)],
+                'certifications' => ['certif', array_flip(positioning_archive::CERTIF_STATUS)],
+            ];
+            foreach ($kinds as $key => [$prefix, $statuses]) {
+                foreach ($positioning[$key] ?? [] as $line) {
+                    $status = get_string($prefix . 'status' . $statuses[$line['statut']], 'tool_vae');
+                    $title = $line['fiche'] . ($line['rang'] === '' ? '' : '-' . $line['rang'])
+                        . (isset($line['intitule']) ? ' - ' . $line['intitule'] : '');
+                    $when = isset($line['date_decision']) ? ' (' . $line['date_decision'] . ')' : '';
+                    if (isset($line['valable_jusqu_au'])) {
+                        $when .= ' - ' . get_string('positioninguntil', 'tool_vae', $line['valable_jusqu_au']);
+                    }
+                    $html = \html_writer::tag('h4', s($title))
+                        . \html_writer::tag('p', s($status . $when . ' - ' . $line['ecrit_le'] . ' - ' . get_string(
+                            $line['fait_foi'] ? 'positioningpdfstands' : 'positioningpdfearlier',
+                            'tool_vae'
+                        )))
+                        . self::narrative($line['motif'], 'texte');
+                    if (isset($line['motif_alerte'])) {
+                        $html .= self::narrative($line['motif_alerte'], 'texte');
+                    }
+                    $chunks[] = ['html' => $html, 'together' => true];
+                }
+            }
+        }
+
         // The preparation of the validation dossier (T-11): last, with the sentence that says what it is and that
         // nobody attests it. Each section under its record and its name, the text as the candidate wrote it.
         if (!empty($validation['rubriques'])) {
@@ -326,6 +370,17 @@ final class pdf_renderer {
         }
 
         return $chunks;
+    }
+
+    /**
+     * The string that titles the document: the archive of the structure (manifest type `structure`) is not the dossier of the
+     * vaeiste, and its title says so. Every other archive keeps the title it always had.
+     *
+     * @param array $manifest
+     * @return string
+     */
+    private static function title_string(array $manifest): string {
+        return ($manifest['type'] ?? '') === 'structure' ? 'structurepdftitle' : 'exportpdftitle';
     }
 
     /**

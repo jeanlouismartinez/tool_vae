@@ -824,4 +824,133 @@ final class record_remover_test extends \advanced_testcase {
             $this->assertStringNotContainsString($markup, $html, "$markup is on the screen as markup.");
         }
     }
+
+    /**
+     * A positioning of the structure is a trace too: the evaluation of a competency of the record or the certification of one of
+     * its blocs, with the history, keeps the row from being removed, though it never locked the framework (T-90, lot 3).
+     */
+    public function test_a_positioning_of_the_structure_blocks_the_removal(): void {
+        global $DB;
+        $candidate = $this->candidate();
+        $this->delete_in_moodle('RNCP36832');
+        $remover = new record_remover();
+        $this->assertNull($remover->refusal('RNCP36832'), 'The premise: nothing keeps the row.');
+
+        foreach (['tool_vae_eval' => 'C03', 'tool_vae_certif' => 'BC01'] as $table => $rank) {
+            $row = (object) [
+                'uuid' => local\identity_map::generate_ulid(), 'candidateid' => $candidate->id, 'fichecode' => 'RNCP36832',
+                'ficherang' => $rank, 'status' => $table === 'tool_vae_eval' ? 'inproof' : 'certified', 'reason' => 'Motif.',
+                'reasonhash' => hash('sha256', 'Motif.'), 'authorid' => null, 'authoruuid' => null, 'importedat' => null,
+                'timecreated' => time(),
+            ];
+            if ($table === 'tool_vae_certif') {
+                $row->decisiondate = '2026-11-04';
+            }
+            $DB->insert_record($table, $row);
+
+            $refusal = $remover->refusal('RNCP36832');
+            $this->assertSame('errorremoverecordtraces', $refusal->errorcode, $table);
+            $this->assertSame($table === 'tool_vae_eval' ? 1 : 0, $refusal->a->evaluations);
+            $this->assertSame($table === 'tool_vae_certif' ? 1 : 0, $refusal->a->certifications);
+            $this->assert_refused(fn() => $remover->remove('RNCP36832'), 'errorremoverecordtraces');
+            $DB->delete_records($table);
+        }
+        $this->assertNull($remover->refusal('RNCP36832'));
+    }
+
+    /**
+     * A work situation is a trace too (lot 1b): it keeps the row from being removed, with its count, though it never locked
+     * the framework.
+     */
+    public function test_a_situation_stops_a_wrongly_imported_record_from_being_removed_with_its_count(): void {
+        global $DB;
+        $candidate = $this->candidate();
+        set_config('validationopen', 1, 'tool_vae');
+        $situation = $this->getDataGenerator()->get_plugin_generator('tool_vae')->create_situation([
+            'userid' => $candidate->id, 'fichecode' => 'RNCP36832', 'title' => 'Ronde de nuit', 'tags' => 'C03',
+            'text' => 'Le texte de la situation.',
+        ]);
+        $this->setAdminUser();
+        // A situation creates no user competency: Moodle lets the framework go.
+        $this->delete_in_moodle('RNCP36832');
+        $remover = new record_remover();
+
+        $refusal = $remover->refusal('RNCP36832');
+
+        $this->assertSame('errorremoverecordtraces', $refusal->errorcode);
+        $this->assertSame(1, $refusal->a->situations);
+        $this->assertSame(0, $refusal->a->spieces);
+        $this->assertSame(0, $refusal->a->notes);
+        $this->assertSame(0, $refusal->a->sections, 'The draft of a situation is counted with it, never as a section too (T15).');
+        foreach (['en', 'fr'] as $lang) {
+            $string = [];
+            include(__DIR__ . '/../lang/' . $lang . '/tool_vae.php');
+            foreach (['situations', 'spieces', 'notes'] as $count) {
+                $this->assertStringContainsString('{$a->' . $count . '}', $string['errorremoverecordtraces'], "lang/$lang");
+            }
+        }
+        $this->assert_refused(fn() => $remover->remove('RNCP36832'), 'errorremoverecordtraces');
+        $this->assertSame(1, $DB->count_records('tool_vae_source', ['fichecode' => 'RNCP36832']));
+        $this->assertSame([], $remover->removable(['RNCP36832']));
+
+        // The draft and its version gone, the situation ALONE still keeps the row: the clause of its own in refusal().
+        $DB->delete_records('tool_vae_version', ['draftid' => $situation->draftid]);
+        $DB->delete_records('tool_vae_draft', ['id' => $situation->draftid]);
+        $refusal = $remover->refusal('RNCP36832');
+        $this->assertSame('errorremoverecordtraces', $refusal->errorcode, 'The situation alone keeps the row.');
+        $this->assertSame(1, $refusal->a->situations);
+        $this->assertSame(0, $refusal->a->sections);
+        $this->assert_refused(fn() => $remover->remove('RNCP36832'), 'errorremoverecordtraces');
+
+        // Without the situation, nothing keeps the row.
+        $DB->delete_records('tool_vae_sitetag', ['situationid' => $situation->id]);
+        $DB->delete_records('tool_vae_sitversion', ['situationid' => $situation->id]);
+        $DB->delete_records('tool_vae_situation', ['id' => $situation->id]);
+        $this->assertNull($remover->refusal('RNCP36832'));
+    }
+
+    /**
+     * A piece of the situations, removed or not, or an annotation whose situation was deleted, is a trace of its own: the
+     * row stays while one is left, after every situation is gone.
+     */
+    public function test_a_piece_or_an_annotation_left_after_the_situations_still_stops_the_removal(): void {
+        global $DB;
+        $candidate = $this->candidate();
+        $this->delete_in_moodle('RNCP36832');
+        $remover = new record_remover();
+        $this->assertNull($remover->refusal('RNCP36832'), 'The premise: nothing keeps the row.');
+        $now = time();
+
+        // A removed piece: the file, the title and the address are gone, the trace stays.
+        $pieceid = (int) $DB->insert_record('tool_vae_spiece', (object) [
+            'uuid' => local\identity_map::generate_ulid(), 'candidateid' => $candidate->id, 'fichecode' => 'RNCP36832',
+            'kind' => 'link', 'nature' => 'other', 'title' => '', 'url' => null, 'timecreated' => $now - 10,
+            'timeremoved' => $now,
+        ]);
+        $refusal = $remover->refusal('RNCP36832');
+        $this->assertSame('errorremoverecordtraces', $refusal->errorcode);
+        $this->assertSame(0, $refusal->a->situations);
+        $this->assertSame(1, $refusal->a->spieces);
+        $this->assertSame(0, $refusal->a->notes);
+        $this->assert_refused(fn() => $remover->remove('RNCP36832'), 'errorremoverecordtraces');
+        $DB->delete_records('tool_vae_spiece', ['id' => $pieceid]);
+        $this->assertNull($remover->refusal('RNCP36832'));
+
+        // An annotation on a situation that was deleted (D-1b-K): a word written about the vaeiste, which stays.
+        $noteid = (int) $DB->insert_record('tool_vae_note', (object) [
+            'uuid' => local\identity_map::generate_ulid(), 'candidateid' => $candidate->id, 'target' => 'situation',
+            'targetuuid' => local\identity_map::generate_ulid(), 'fichecode' => 'RNCP36832', 'slot' => 1, 'ficherang' => '',
+            'authorid' => null, 'authoruuid' => null, 'text' => 'Sur une situation supprimee.', 'textformat' => FORMAT_PLAIN,
+            'state' => 'active', 'withdraws' => null, 'notehash' => hash('sha256', 'x'), 'importedat' => null,
+            'timecreated' => $now,
+        ]);
+        $refusal = $remover->refusal('RNCP36832');
+        $this->assertSame('errorremoverecordtraces', $refusal->errorcode);
+        $this->assertSame(0, $refusal->a->spieces);
+        $this->assertSame(1, $refusal->a->notes);
+        $this->assert_refused(fn() => $remover->remove('RNCP36832'), 'errorremoverecordtraces');
+        $this->assertSame(1, $DB->count_records('tool_vae_source', ['fichecode' => 'RNCP36832']));
+        $DB->delete_records('tool_vae_note', ['id' => $noteid]);
+        $this->assertNull($remover->refusal('RNCP36832'));
+    }
 }

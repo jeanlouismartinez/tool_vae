@@ -51,6 +51,9 @@ const validerValidation = ajv.compile(lire(join(dossier, 'validation.schema.json
 const validerReflexion = ajv.compile(lire(join(dossier, 'reflexion.schema.json')));
 const validerPieces = ajv.compile(lire(join(dossier, 'pieces.schema.json')));
 const validerHorsActivite = ajv.compile(lire(join(dossier, 'hors_activite.schema.json')));
+const validerPositionnement = ajv.compile(lire(join(dossier, 'positionnement.schema.json')));
+const validerAutopositionnement = ajv.compile(lire(join(dossier, 'autopositionnement.schema.json')));
+const validerSituations = ajv.compile(lire(join(dossier, 'situations.schema.json')));
 
 /** Regles hors schema. Ne supposent rien de la forme : le schema a pu la refuser. */
 function reglesHorsSchema(preuve) {
@@ -253,6 +256,88 @@ for (const cas of jeuHorsActivite.cas) {
     }
 }
 
+// Les positionnements de la structure (T-90, lot 3) : meme methode, septieme schema.
+const erreursPositionnement = (document) => (validerPositionnement(document)
+    ? []
+    : validerPositionnement.errors.map((e) => `${e.instancePath || '/'} ${e.message}`));
+const exemplesPositionnement = readdirSync(join(dossier, 'exemples', 'positionnement')).filter((f) => f.endsWith('.json')).sort();
+for (const fichier of exemplesPositionnement) {
+    const erreurs = erreursPositionnement(lire(join(dossier, 'exemples', 'positionnement', fichier)));
+    if (erreurs.length) {
+        echecs++;
+        console.log(`  ✗ exemple de positionnement refuse : ${fichier}\n      ${erreurs.join('\n      ')}`);
+    }
+}
+const jeuPositionnement = lire(join(dossier, 'tests', 'contre-exemples-positionnement.json'));
+const basePositionnement = lire(join(dossier, jeuPositionnement.base));
+const nomsPositionnement = new Set();
+for (const cas of jeuPositionnement.cas) {
+    if (nomsPositionnement.has(cas.nom)) {
+        echecs++;
+        console.log(`  ✗ contre-exemple de positionnement en double : ${cas.nom}`);
+    }
+    nomsPositionnement.add(cas.nom);
+    if (erreursPositionnement(appliquer(basePositionnement, cas)).length === 0) {
+        echecs++;
+        console.log(`  ✗ contre-exemple de positionnement accepte : ${cas.nom} - ${cas.regle}`);
+    }
+}
+
+// L'auto-positionnement du vaeiste (lot 1a) : meme methode, huitieme schema.
+const erreursAutopositionnement = (document) => (validerAutopositionnement(document)
+    ? []
+    : validerAutopositionnement.errors.map((e) => `${e.instancePath || '/'} ${e.message}`));
+const exemplesAutopositionnement = readdirSync(join(dossier, 'exemples', 'autopositionnement'))
+    .filter((f) => f.endsWith('.json')).sort();
+for (const fichier of exemplesAutopositionnement) {
+    const erreurs = erreursAutopositionnement(lire(join(dossier, 'exemples', 'autopositionnement', fichier)));
+    if (erreurs.length) {
+        echecs++;
+        console.log(`  ✗ exemple d'autopositionnement refuse : ${fichier}\n      ${erreurs.join('\n      ')}`);
+    }
+}
+const jeuAutopositionnement = lire(join(dossier, 'tests', 'contre-exemples-autopositionnement.json'));
+const baseAutopositionnement = lire(join(dossier, jeuAutopositionnement.base));
+const nomsAutopositionnement = new Set();
+for (const cas of jeuAutopositionnement.cas) {
+    if (nomsAutopositionnement.has(cas.nom)) {
+        echecs++;
+        console.log(`  ✗ contre-exemple d'autopositionnement en double : ${cas.nom}`);
+    }
+    nomsAutopositionnement.add(cas.nom);
+    if (erreursAutopositionnement(appliquer(baseAutopositionnement, cas)).length === 0) {
+        echecs++;
+        console.log(`  ✗ contre-exemple d'autopositionnement accepte : ${cas.nom} - ${cas.regle}`);
+    }
+}
+
+// Les situations de travail du vaeiste (lot 1b) : meme methode, neuvieme schema.
+const erreursSituations = (document) => (validerSituations(document)
+    ? []
+    : validerSituations.errors.map((e) => `${e.instancePath || '/'} ${e.message}`));
+const exemplesSituations = readdirSync(join(dossier, 'exemples', 'situations')).filter((f) => f.endsWith('.json')).sort();
+for (const fichier of exemplesSituations) {
+    const erreurs = erreursSituations(lire(join(dossier, 'exemples', 'situations', fichier)));
+    if (erreurs.length) {
+        echecs++;
+        console.log(`  ✗ exemple de situations refuse : ${fichier}\n      ${erreurs.join('\n      ')}`);
+    }
+}
+const jeuSituations = lire(join(dossier, 'tests', 'contre-exemples-situations.json'));
+const baseSituations = lire(join(dossier, jeuSituations.base));
+const nomsSituations = new Set();
+for (const cas of jeuSituations.cas) {
+    if (nomsSituations.has(cas.nom)) {
+        echecs++;
+        console.log(`  ✗ contre-exemple de situations en double : ${cas.nom}`);
+    }
+    nomsSituations.add(cas.nom);
+    if (erreursSituations(appliquer(baseSituations, cas)).length === 0) {
+        echecs++;
+        console.log(`  ✗ contre-exemple de situations accepte : ${cas.nom} - ${cas.regle}`);
+    }
+}
+
 let produites = [];
 if (preuvesProduites !== null) {
     try {
@@ -291,3 +376,9 @@ console.log(`  ✓ schema de pieces : ${exemplesPieces.length} exemples acceptes
     + `${jeuPieces.cas.length} contre-exemples refuses`);
 console.log(`  ✓ schema de hors_activite : ${exemplesHorsActivite.length} exemples acceptes, `
     + `${jeuHorsActivite.cas.length} contre-exemples refuses`);
+console.log(`  ✓ schema de positionnement : ${exemplesPositionnement.length} exemples acceptes, `
+    + `${jeuPositionnement.cas.length} contre-exemples refuses`);
+console.log(`  ✓ schema d'autopositionnement : ${exemplesAutopositionnement.length} exemples acceptes, `
+    + `${jeuAutopositionnement.cas.length} contre-exemples refuses`);
+console.log(`  ✓ schema de situations : ${exemplesSituations.length} exemples acceptes, `
+    + `${jeuSituations.cas.length} contre-exemples refuses`);

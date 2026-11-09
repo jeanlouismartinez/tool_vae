@@ -670,6 +670,58 @@ final class piece_manager_test extends \advanced_testcase {
         $this->assertSame(0, piece_manager::used_bytes((int) $this->candidate->id));
     }
 
+    /**
+     * The pieces of the work situations (lot 1b) count against the same quota, each piece once however many situations cite
+     * it; a removed one, a link and someone else's do not count. The rows are inserted: the rule under test is the sum.
+     */
+    public function test_the_quota_is_shared_with_the_pieces_of_the_situations(): void {
+        global $DB;
+        set_config('piecemaxpercandidate', 1048576, 'tool_vae');
+        $now = time();
+        $spiece = function (int $candidateid, string $kind, ?int $size, ?int $removed) use ($DB, $now): int {
+            return (int) $DB->insert_record('tool_vae_spiece', (object) [
+                'uuid' => local\identity_map::generate_ulid(),
+                'candidateid' => $candidateid,
+                'fichecode' => 'RNCP36832',
+                'kind' => $kind,
+                'nature' => 'writing',
+                'title' => '',
+                'ext' => $kind === 'file' ? 'pdf' : null,
+                'mimetype' => $kind === 'file' ? 'application/pdf' : null,
+                'filesize' => $size,
+                'sha256' => $kind === 'file' ? str_repeat('a', 64) : null,
+                'url' => $kind === 'link' ? 'https://exemple.test/x' : null,
+                'timecreated' => $now,
+                'timeremoved' => $removed,
+            ]);
+        };
+        $cited = $spiece((int) $this->candidate->id, 'file', 600 * 1024, null);
+        foreach ([101, 102] as $situationid) {
+            $DB->insert_record('tool_vae_slink', (object) [
+                'situationid' => $situationid, 'pieceid' => $cited, 'part' => '', 'timecreated' => $now,
+            ]);
+        }
+        $spiece((int) $this->candidate->id, 'file', 900 * 1024, $now);
+        $spiece((int) $this->candidate->id, 'link', null, null);
+        $spiece((int) $this->manager->id, 'file', 900 * 1024, null);
+
+        $this->assertSame(600 * 1024, piece_manager::used_bytes((int) $this->candidate->id));
+
+        $manager = new piece_manager();
+        $this->assert_refused(
+            fn() => $manager->add_file(
+                $this->evidenceid,
+                'other',
+                '',
+                $this->file($this->pdf(str_repeat('y', 500 * 1024))),
+                'a.pdf'
+            ),
+            'errorpiecequota'
+        );
+        $row = $manager->add_file($this->evidenceid, 'other', '', $this->file($this->pdf(str_repeat('y', 300 * 1024))), 'b.pdf');
+        $this->assertSame(600 * 1024 + (int) $row->filesize, piece_manager::used_bytes((int) $this->candidate->id));
+    }
+
     public function test_the_right_to_open_follows_the_attestation_rule_and_the_administrator(): void {
         $row = (new piece_manager())->add_file($this->evidenceid, 'other', '', $this->file($this->pdf()), 'a.pdf');
 

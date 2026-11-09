@@ -39,6 +39,18 @@ final class pending_report {
     public const CATCH_UP_DAYS = 7;
 
     /**
+     * Whether a number of days switches the reminder on: from one day to the longest delay, zero and beyond being off.
+     *
+     * One rule for the scheduled task and for the screen that says whether the reminder is on.
+     *
+     * @param int $days The value of the setting `overduedays`.
+     * @return bool
+     */
+    public static function is_reminder_days(int $days): bool {
+        return $days >= 1 && $days <= self::MAX_DAYS;
+    }
+
+    /**
      * The declarations awaiting an attestation for at least this many days.
      *
      * @param int $days Zero lists every declaration awaiting.
@@ -98,6 +110,28 @@ final class pending_report {
         }
 
         return $out;
+    }
+
+    /**
+     * For each candidate, how many managers a declaration would be announced to: a number, never a name.
+     *
+     * The audience of the notifier (notifier::evidence_declared): the followers of the candidate who may attest, whose account
+     * is neither suspended nor deleted. A holder of viewany who follows nobody is not counted, as the notifier does not tell
+     * them. The pointer of the referents of a bloc only changes WHO of these is told first, never how many may be, so it is
+     * left out. A zero says that nobody would be told; it says nothing of the candidate nor of the managers.
+     *
+     * @param int[] $candidateids
+     * @return int[] candidateid => number, one key for each candidate asked, in the order given.
+     */
+    public static function reachable(array $candidateids): array {
+        $found = [];
+        foreach ($candidateids as $candidateid) {
+            $candidateid = (int) $candidateid;
+            $audience = array_filter(access::followers($candidateid), fn($id) => access::can_attest($candidateid, $id));
+            $found[$candidateid] = count(referent_manager::active(array_values($audience)));
+        }
+
+        return $found;
     }
 
     /**

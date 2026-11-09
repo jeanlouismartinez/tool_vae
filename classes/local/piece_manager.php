@@ -256,7 +256,9 @@ final class piece_manager {
     }
 
     /**
-     * How many bytes of files a candidate keeps, the removed ones not counted.
+     * How many bytes of files a candidate keeps, the removed ones not counted: the pieces of the declarations and those of the
+     * work situations (spiece_manager, lot 1b), under one quota. A piece of a situation is one row whatever the number of
+     * situations that cite it, so it counts once.
      *
      * @param int $candidateid
      * @return int
@@ -264,11 +266,17 @@ final class piece_manager {
     public static function used_bytes(int $candidateid): int {
         global $DB;
 
-        return (int) $DB->get_field_sql(
-            "SELECT COALESCE(SUM(filesize), 0) FROM {tool_vae_piece}
-              WHERE candidateid = :candidateid AND kind = :kind AND timeremoved IS NULL",
-            ['candidateid' => $candidateid, 'kind' => self::KIND_FILE]
-        );
+        $params = ['candidateid' => $candidateid, 'kind' => self::KIND_FILE];
+        $total = 0;
+        foreach (['tool_vae_piece', spiece_manager::TABLE] as $table) {
+            $total += (int) $DB->get_field_sql(
+                "SELECT COALESCE(SUM(filesize), 0) FROM {{$table}}
+                  WHERE candidateid = :candidateid AND kind = :kind AND timeremoved IS NULL",
+                $params
+            );
+        }
+
+        return $total;
     }
 
     /**
@@ -414,30 +422,11 @@ final class piece_manager {
      * @return \stdClass
      */
     private function insert_file(int $evidenceid, string $nature, string $title, string $path): \stdClass {
-        global $DB;
-
         $evidence = $this->require_may_add($evidenceid);
         $title = $this->clean_title($title);
         $this->require_nature($nature);
 
-        $settings = self::settings();
-        if (!is_file($path) || !is_readable($path)) {
-            throw new \moodle_exception('errorpiecefile', 'tool_vae');
-        }
-        $size = (int) filesize($path);
-        if ($size <= 0) {
-            throw new \moodle_exception('errorpiecefile', 'tool_vae');
-        }
-        if ($size > $settings->maxbytes) {
-            throw new \moodle_exception('errorpiecetoolarge', 'tool_vae', '', display_size($settings->maxbytes));
-        }
-        if (self::used_bytes((int) $evidence->candidateid) + $size > $settings->maxpercandidate) {
-            throw new \moodle_exception('errorpiecequota', 'tool_vae', '', display_size($settings->maxpercandidate));
-        }
-
-        [$ext, $mime] = self::detect_type($path);
-        $this->scan($path, 'piece.' . $ext);
-        $sha256 = hash_file('sha256', $path);
+        [$ext, $mime, $size, $sha256] = self::check_file($path, (int) $evidence->candidateid);
 
         $row = (object) [
             'uuid' => identity_map::generate_ulid(),
@@ -453,30 +442,89 @@ final class piece_manager {
             'timecreated' => time(),
             'usercreated' => (int) $evidence->candidateid,
         ];
+        self::store_file('tool_vae_piece', self::FILEAREA, $row, $path);
 
-        $context = \context_user::instance((int) $evidence->candidateid);
+        $this->added($row);
+
+        return $row;
+    }
+
+    /**
+     * What a file must pass before it is kept, the same for the pieces of a declaration and for those of a work situation
+     * (spiece_manager): readable and not empty, within the size of one file, within the quota of the candidate - which both
+     * kinds of piece share (used_bytes()) -, of a type read on its content, scanned. Nothing is written.
+     *
+     * The caller holds the lock of the candidate (lock()), so that the quota is read with nobody else's form between.
+     *
+     * @param string $path Where the upload is now.
+     * @param int $candidateid Whose quota it counts against.
+     * @return array [extension, mime type, size in bytes, SHA-256 of the content]
+     * @throws \moodle_exception errorpiecefile, errorpiecetoolarge, errorpiecequota, errorpiecetype, errorpiecemacro,
+     *         errorpiecevirus, errorpiecenoantivirus
+     */
+    public static function check_file(string $path, int $candidateid): array {
+        $settings = self::settings();
+        if (!is_file($path) || !is_readable($path)) {
+            throw new \moodle_exception('errorpiecefile', 'tool_vae');
+        }
+        $size = (int) filesize($path);
+        if ($size <= 0) {
+            throw new \moodle_exception('errorpiecefile', 'tool_vae');
+        }
+        if ($size > $settings->maxbytes) {
+            throw new \moodle_exception('errorpiecetoolarge', 'tool_vae', '', display_size($settings->maxbytes));
+        }
+        if (self::used_bytes($candidateid) + $size > $settings->maxpercandidate) {
+            throw new \moodle_exception('errorpiecequota', 'tool_vae', '', display_size($settings->maxpercandidate));
+        }
+
+        [$ext, $mime] = self::detect_type($path);
+        self::scan($path, 'piece.' . $ext);
+        $sha256 = hash_file('sha256', $path);
+
+        return [$ext, $mime, $size, $sha256];
+    }
+
+    /**
+     * Write the row of a file and the file together, then read the file back and compare its digest before the piece counts.
+     *
+     * The file goes in the candidate's user context, under the identifier of the row and the extension of its detected type:
+     * the name the browser gave is never kept. A failure takes the row, the file and, when nothing else refers to it, the
+     * content written to the disk.
+     *
+     * @param string $table tool_vae_piece, or tool_vae_spiece (spiece_manager).
+     * @param string $filearea The file area of that table.
+     * @param \stdClass $row The row to insert, with uuid, candidateid, ext and sha256; its id is set here.
+     * @param string $path Where the upload is now, already checked by check_file().
+     * @return \stdClass The row, with its id.
+     * @throws \moodle_exception errorpiecefile
+     */
+    public static function store_file(string $table, string $filearea, \stdClass $row, string $path): \stdClass {
+        global $DB;
+
+        $context = \context_user::instance((int) $row->candidateid);
         $fs = get_file_storage();
         $hash = null;
         $transaction = $DB->start_delegated_transaction();
         try {
-            $row->id = $DB->insert_record('tool_vae_piece', $row);
+            $row->id = $DB->insert_record($table, $row);
             $stored = $fs->create_file_from_pathname([
                 'contextid' => $context->id,
                 'component' => 'tool_vae',
-                'filearea' => self::FILEAREA,
+                'filearea' => $filearea,
                 'itemid' => (int) $row->id,
                 'filepath' => '/',
-                'filename' => $row->uuid . '.' . $ext,
-                'userid' => (int) $evidence->candidateid,
+                'filename' => $row->uuid . '.' . $row->ext,
+                'userid' => (int) $row->candidateid,
             ], $path);
             $hash = $stored->get_contenthash();
-            if (hash('sha256', $stored->get_content()) !== $sha256) {
+            if (hash('sha256', $stored->get_content()) !== $row->sha256) {
                 throw new \moodle_exception('errorpiecefile', 'tool_vae');
             }
             $transaction->allow_commit();
         } catch (\Throwable $e) {
             if (!empty($row->id)) {
-                $fs->delete_area_files($context->id, 'tool_vae', self::FILEAREA, (int) $row->id);
+                $fs->delete_area_files($context->id, 'tool_vae', $filearea, (int) $row->id);
             }
             try {
                 $transaction->rollback($e);
@@ -492,8 +540,6 @@ final class piece_manager {
                 throw $rethrown;
             }
         }
-
-        $this->added($row);
 
         return $row;
     }

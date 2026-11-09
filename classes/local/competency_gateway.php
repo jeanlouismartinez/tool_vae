@@ -53,6 +53,19 @@ class competency_gateway {
      */
     public const SUBSYSTEM = 'core_competency';
 
+    // The statuses of a learning plan, as the core numbers them. Tied to the core's constants here, in the one file
+    // that may name the core (MC-5), so that a renumbering upstream reaches the plugin without a word changed elsewhere.
+    /** @var int A learning plan of the core still being written. */
+    public const PLAN_DRAFT = \core_competency\plan::STATUS_DRAFT;
+    /** @var int A learning plan in force. */
+    public const PLAN_ACTIVE = \core_competency\plan::STATUS_ACTIVE;
+    /** @var int A learning plan closed, its competencies frozen in the core's archive. */
+    public const PLAN_COMPLETE = \core_competency\plan::STATUS_COMPLETE;
+    /** @var int A learning plan its owner sent for review. */
+    public const PLAN_WAITING_FOR_REVIEW = \core_competency\plan::STATUS_WAITING_FOR_REVIEW;
+    /** @var int A learning plan a reviewer took. */
+    public const PLAN_IN_REVIEW = \core_competency\plan::STATUS_IN_REVIEW;
+
     /**
      * Whether the core competency subsystem is switched on.
      *
@@ -789,6 +802,37 @@ class competency_gateway {
     }
 
     /**
+     * How a framework names its levels: the taxonomy of each level, as the core displays it (lot 1a).
+     *
+     * The core keeps, on the framework, one taxonomy per level of competency (domain, competency, skill...), the first level
+     * of competency being 1; a level it does not name falls back on "competency", as the core itself does. Read without the
+     * viewing right of the core, for the reason framework_tree() gives.
+     *
+     * @param int $frameworkid
+     * @return string[] Level (from 1, the top level of competency) => the displayable name. Empty for a framework the core
+     *         no longer holds.
+     */
+    public function framework_taxonomies(int $frameworkid): array {
+        if ($frameworkid <= 0) {
+            return [];
+        }
+        $framework = \core_competency\competency_framework::get_record(['id' => $frameworkid]);
+        if (!$framework) {
+            return [];
+        }
+        $names = \core_competency\competency_framework::get_taxonomies_list();
+        $out = [];
+        // The persistent's own getter: the constants by level from 1, a level left empty already read as "competency".
+        $constants = $framework->get('taxonomies');
+        foreach ((array) $constants as $level => $constant) {
+            $constant = (string) $constant;
+            $out[(int) $level] = (string) ($names[$constant] ?? $names[\core_competency\competency_framework::TAXONOMY_COMPETENCY]);
+        }
+
+        return $out;
+    }
+
+    /**
      * The bloc a competency sits under, for showing next to it (T-33).
      *
      * Read from the persistents themselves, for the reason competency_name() gives.
@@ -873,5 +917,623 @@ class competency_gateway {
      */
     public function add_competency_to_course(int $courseid, int $competencyid): bool {
         return (bool) \core_competency\api::add_competency_to_course($courseid, $competencyid);
+    }
+
+    /**
+     * The learning plans of a user: name, status and template, nothing else (T-90).
+     *
+     * A plan is a fact of the person's pathway, which the organisation screen shows next to the
+     * records they declared on. Who reviews it is the beginning of an evaluation, and the plugin
+     * reads no evaluation (D-1): the columns are named one by one so that reviewerid never comes
+     * along, and a test captures the SQL to hold it there. Read by the table, not by the core's
+     * api::list_user_plans(), which throws for a reader the core does not admit: who may see a plan here
+     * is decided before the call, in organisation, by the core's own rules (can_view_plans_of() and
+     * can_view_draft_plans_of(); conception T-90, § 4.2 and § 4.3).
+     *
+     * Two kinds of plan, two rights, as in the core (api::list_user_plans, word for word): a draft - draft,
+     * waiting for review, in review - is the core's secret until a right to see drafts (see
+     * can_view_draft_plans_of()), and an active or complete plan until a right to see plans (see
+     * can_view_plans_of()). The caller, having decided which it holds, asks for the kinds it may read; asked
+     * for neither, the listing gives none of the five statuses. A status the core does not know is listed, as the
+     * core lists it: it takes a write straight into the table to make one.
+     *
+     * @param int $userid
+     * @param bool $drafts Whether the drafts are listed.
+     * @param bool $active Whether the active and complete plans are listed.
+     * @return \stdClass[] Keyed by plan id, name order: id, name, status, templateid, origtemplateid, timemodified.
+     */
+    public function list_user_plans(int $userid, bool $drafts = false, bool $active = true): array {
+        global $DB;
+
+        $where = 'userid = :userid';
+        $params = ['userid' => $userid];
+        [$statussql, $statusparams] = self::plan_status_filter($drafts, $active);
+        $where .= $statussql;
+        $params += $statusparams;
+
+        return $DB->get_records_select(
+            'competency_plan',
+            $where,
+            $params,
+            'name ASC, id ASC',
+            'id, name, status, templateid, origtemplateid, timemodified'
+        );
+    }
+
+    /**
+     * The learning plans of several people, in one query (T-90 lot 3).
+     *
+     * The table of the people a manager follows reads their plans together: one query whatever the number of people,
+     * never one per person. The kinds of plan follow list_user_plans() - the caller decides, person by person, which
+     * kinds the core lets it read (can_view_plans_of(), can_view_draft_plans_of()) and asks for each kind separately.
+     * Four columns, named one by one: the plan's template, its reviewer and its dates are not needed to say that a
+     * plan exists, and a reviewer is the beginning of an evaluation (D-1).
+     *
+     * @param int[] $userids The people whose plans are read; the caller has checked the right on each of them.
+     * @param bool $drafts Whether the drafts are listed.
+     * @param bool $active Whether the active and complete plans are listed.
+     * @return \stdClass[] Keyed by plan id, name order: id, userid, name, status. Empty for nobody, without a query.
+     */
+    public function list_plans_of_users(array $userids, bool $drafts = false, bool $active = true): array {
+        global $DB;
+
+        if (!$userids) {
+            return [];
+        }
+        [$usersql, $params] = $DB->get_in_or_equal(array_values($userids), SQL_PARAMS_NAMED, 'plu');
+        [$statussql, $statusparams] = self::plan_status_filter($drafts, $active);
+
+        return $DB->get_records_select(
+            'competency_plan',
+            "userid $usersql" . $statussql,
+            $params + $statusparams,
+            'name ASC, id ASC',
+            'id, userid, name, status'
+        );
+    }
+
+    /**
+     * The condition on the status of a plan that list_user_plans() and list_plans_of_users() share.
+     *
+     * A status the core does not know is listed, as the core lists it: the condition names what it leaves out.
+     *
+     * @param bool $drafts Whether the drafts are listed.
+     * @param bool $active Whether the active and complete plans are listed.
+     * @return array [string SQL beginning with AND (empty when nothing is left out), array parameters].
+     */
+    private static function plan_status_filter(bool $drafts, bool $active): array {
+        global $DB;
+
+        $left = [];
+        if (!$drafts) {
+            $left = [self::PLAN_DRAFT, self::PLAN_WAITING_FOR_REVIEW, self::PLAN_IN_REVIEW];
+        }
+        if (!$active) {
+            $left = array_merge($left, [self::PLAN_ACTIVE, self::PLAN_COMPLETE]);
+        }
+        if (!$left) {
+            return ['', []];
+        }
+        [$insql, $inparams] = $DB->get_in_or_equal($left, SQL_PARAMS_NAMED, 'status', false);
+
+        return [" AND status $insql", $inparams];
+    }
+
+    /**
+     * The competencies of a learning plan, as the core itself resolves them (T-90).
+     *
+     * Three places, one rule, copied from plan::get_competencies(): a complete plan is frozen in
+     * competency_usercompplan (by plan AND user, as the core reads it); a plan on a template
+     * follows the template's list; any other plan has its own. A plan the core detached from its
+     * template has templateid null and origtemplateid kept, so it reads its own list like any plan
+     * without a template. The archive row also carries a grade and a proficiency: the competency id
+     * is the one column read, and a test captures the SQL to hold it there (D-1). A plan that does
+     * not exist has no competencies, and nothing is thrown.
+     *
+     * @param int $planid
+     * @return int[] Competency ids, in the core's order (sortorder, then id).
+     */
+    public function plan_competency_ids(int $planid): array {
+        global $DB;
+
+        $plan = $DB->get_record('competency_plan', ['id' => $planid], 'id, userid, status, templateid');
+        if (!$plan) {
+            return [];
+        }
+
+        if ((int) $plan->status === self::PLAN_COMPLETE) {
+            $ids = $DB->get_fieldset_select(
+                'competency_usercompplan',
+                'competencyid',
+                'planid = :planid AND userid = :userid ORDER BY sortorder ASC, id ASC',
+                ['planid' => $planid, 'userid' => $plan->userid]
+            );
+        } else if ($plan->templateid) {
+            $ids = $DB->get_fieldset_select(
+                'competency_templatecomp',
+                'competencyid',
+                'templateid = :templateid ORDER BY sortorder ASC, id ASC',
+                ['templateid' => $plan->templateid]
+            );
+        } else {
+            $ids = $DB->get_fieldset_select(
+                'competency_plancomp',
+                'competencyid',
+                'planid = :planid ORDER BY sortorder ASC, id ASC',
+                ['planid' => $planid]
+            );
+        }
+
+        return array_map('intval', $ids);
+    }
+
+    /**
+     * The courses that carry a competency - hidden ones included, and said to be hidden (T-90).
+     *
+     * The pathway shows, next to a competency, where the site teaches it. A hidden course is still
+     * where it is taught: omitting it would put a "no course" where there is one, a false zero, so
+     * it is returned with visible = 0 and the screen marks it. The course's name and visibility are
+     * all that is read; the core's list_course_competencies() is not used because it is asked per
+     * course, and this is asked per competency. The name is raw: the screen passes it through
+     * format_string(). Sorted in PHP by the collator, not by the database: the order of the bytes
+     * differs between PostgreSQL under musl, PostgreSQL under glibc and MariaDB on a capital or an
+     * accented initial, and a pathway must read the same on every site.
+     *
+     * @param int $competencyid
+     * @return \stdClass[] Keyed by course id, name order: courseid, fullname, visible.
+     */
+    public function courses_with_competency(int $competencyid): array {
+        global $DB;
+
+        $courses = $DB->get_records_sql(
+            "SELECT c.id AS courseid, c.fullname, c.visible
+               FROM {competency_coursecomp} cc
+               JOIN {course} c ON c.id = cc.courseid
+              WHERE cc.competencyid = :competencyid",
+            ['competencyid' => $competencyid]
+        );
+        \core_collator::asort_objects_by_property($courses, 'fullname');
+
+        return $courses;
+    }
+
+    /**
+     * The courses that carry each of a list of competencies, in one reading (T-90).
+     *
+     * The pathway asks for every competency of every record at once: one query for the list, never one per
+     * competency. Same rows and same order as courses_with_competency(), which is the single-competency form.
+     *
+     * @param int[] $competencyids
+     * @return \stdClass[][] Competency id => courses keyed by course id, name order: courseid, fullname, visible.
+     *                       A competency no course carries has no key.
+     */
+    public function courses_with_competencies(array $competencyids): array {
+        global $DB;
+
+        if (!$competencyids) {
+            return [];
+        }
+        [$insql, $params] = $DB->get_in_or_equal(array_values($competencyids), SQL_PARAMS_NAMED, 'comp');
+        $rows = $DB->get_records_sql(
+            "SELECT cc.id, cc.competencyid, c.id AS courseid, c.fullname, c.visible
+               FROM {competency_coursecomp} cc
+               JOIN {course} c ON c.id = cc.courseid
+              WHERE cc.competencyid $insql",
+            $params
+        );
+
+        $out = [];
+        foreach ($rows as $row) {
+            $out[(int) $row->competencyid][(int) $row->courseid] = (object) [
+                'courseid' => (int) $row->courseid,
+                'fullname' => $row->fullname,
+                'visible' => (int) $row->visible,
+            ];
+        }
+        foreach ($out as &$courses) {
+            \core_collator::asort_objects_by_property($courses, 'fullname');
+        }
+
+        return $out;
+    }
+
+    /**
+     * The activities that carry each of a list of competencies, with their course, in one reading (T-90 lot 1 bis).
+     *
+     * The offer of training one level below the course: which quiz, which assignment works a competency. A fact about
+     * the site, never about a person. What the activity does with the competency (the rule it applies, the grade it
+     * overrides) is the start of an assessment and is not read here. An activity being deleted is not counted. The
+     * context of each activity is loaded with the row, so that the right asked of each afterwards reads nothing more.
+     * The name of an activity is not here: it is in the table of its module, and the core reads it through the
+     * course's module information, with the right of the reader.
+     *
+     * @param int[] $competencyids
+     * @return \stdClass[][] Competency id => activities keyed by course module id: cmid, courseid, modname,
+     *                       coursefullname, coursevisible. A competency no activity carries has no key.
+     */
+    public function modules_with_competencies(array $competencyids): array {
+        global $DB;
+
+        if (!$competencyids) {
+            return [];
+        }
+        [$insql, $params] = $DB->get_in_or_equal(array_values($competencyids), SQL_PARAMS_NAMED, 'comp');
+        $params['modlevel'] = CONTEXT_MODULE;
+        $ctxfields = \context_helper::get_preload_record_columns_sql('ctx');
+        $rows = $DB->get_records_sql(
+            "SELECT mc.id, mc.competencyid, cm.id AS cmid, cm.course AS courseid, md.name AS modname,
+                    c.fullname AS coursefullname, c.visible AS coursevisible, $ctxfields
+               FROM {competency_modulecomp} mc
+               JOIN {course_modules} cm ON cm.id = mc.cmid
+               JOIN {modules} md ON md.id = cm.module
+               JOIN {course} c ON c.id = cm.course
+          LEFT JOIN {context} ctx ON ctx.instanceid = cm.id AND ctx.contextlevel = :modlevel
+              WHERE mc.competencyid $insql AND cm.deletioninprogress = 0",
+            $params
+        );
+
+        $out = [];
+        foreach ($rows as $row) {
+            \context_helper::preload_from_record($row);
+            $out[(int) $row->competencyid][(int) $row->cmid] = (object) [
+                'cmid' => (int) $row->cmid,
+                'courseid' => (int) $row->courseid,
+                'modname' => $row->modname,
+                'coursefullname' => $row->coursefullname,
+                'coursevisible' => (int) $row->coursevisible,
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * The framework of each of a list of competencies, in one reading (T-90).
+     *
+     * @param int[] $competencyids
+     * @return int[] Competency id => framework id. A competency the core does not hold has no key.
+     */
+    public function frameworks_of_competencies(array $competencyids): array {
+        global $DB;
+
+        if (!$competencyids) {
+            return [];
+        }
+        [$insql, $params] = $DB->get_in_or_equal(array_values($competencyids), SQL_PARAMS_NAMED, 'comp');
+        $out = [];
+        foreach ($DB->get_records_select('competency', "id $insql", $params, '', 'id, competencyframeworkid') as $row) {
+            $out[(int) $row->id] = (int) $row->competencyframeworkid;
+        }
+
+        return $out;
+    }
+
+    /**
+     * The name, the blocs and the competencies of each of a list of frameworks, in two readings (T-90 lot 4).
+     *
+     * The page of the organisation lists every record the site imported: a reading per record would grow with the site.
+     * A BLOC is a competency other competencies of the same framework sit under, as the rest of the plugin has it; a
+     * record of one level - the France compétences export - has none. A parent that belongs to another framework is a
+     * bloc of nothing here. COMPETENCIES are all the rows of the framework, blocs included, as
+     * count_framework_competencies() counts them. A framework with no competency is returned with zeros; one the core no
+     * longer holds, or an id of 0, has no key - the caller tells the two apart by that.
+     *
+     * @param int[] $frameworkids
+     * @return \stdClass[] Keyed by framework id: name (the short name typed at the import), blocs, competencies.
+     */
+    public function framework_summaries(array $frameworkids): array {
+        global $DB;
+
+        $frameworkids = array_filter(array_map('intval', $frameworkids), fn($id) => $id > 0);
+        if (!$frameworkids) {
+            return [];
+        }
+        [$insql, $params] = $DB->get_in_or_equal(array_values($frameworkids), SQL_PARAMS_NAMED, 'fw');
+        $rows = $DB->get_records_sql(
+            "SELECT f.id, f.shortname, COUNT(c.id) AS competencies
+               FROM {competency_framework} f
+          LEFT JOIN {competency} c ON c.competencyframeworkid = f.id
+              WHERE f.id $insql
+           GROUP BY f.id, f.shortname",
+            $params
+        );
+        $out = [];
+        foreach ($rows as $row) {
+            $out[(int) $row->id] = (object) [
+                'name' => (string) $row->shortname,
+                'blocs' => 0,
+                'competencies' => (int) $row->competencies,
+            ];
+        }
+        if (!$out) {
+            return [];
+        }
+        [$insql, $params] = $DB->get_in_or_equal(array_keys($out), SQL_PARAMS_NAMED, 'fw');
+        $blocs = $DB->get_records_sql(
+            "SELECT c.competencyframeworkid AS frameworkid, COUNT(DISTINCT parent.id) AS blocs
+               FROM {competency} c
+               JOIN {competency} parent ON parent.id = c.parentid AND parent.competencyframeworkid = c.competencyframeworkid
+              WHERE c.competencyframeworkid $insql
+           GROUP BY c.competencyframeworkid",
+            $params
+        );
+        foreach ($blocs as $row) {
+            $out[(int) $row->frameworkid]->blocs = (int) $row->blocs;
+        }
+
+        return $out;
+    }
+
+    /**
+     * The competencies of several frameworks, in one reading (T-90 lot 4).
+     *
+     * @param int[] $frameworkids
+     * @return int[][] Framework id => competency ids, in id order. A framework with none, or that the core does not
+     *                 hold, has no key.
+     */
+    public function competencies_of_frameworks(array $frameworkids): array {
+        global $DB;
+
+        $frameworkids = array_filter(array_map('intval', $frameworkids), fn($id) => $id > 0);
+        if (!$frameworkids) {
+            return [];
+        }
+        [$insql, $params] = $DB->get_in_or_equal(array_values($frameworkids), SQL_PARAMS_NAMED, 'fw');
+        $out = [];
+        $rows = $DB->get_records_select(
+            'competency',
+            "competencyframeworkid $insql",
+            $params,
+            'id ASC',
+            'id, competencyframeworkid'
+        );
+        foreach ($rows as $row) {
+            $out[(int) $row->competencyframeworkid][] = (int) $row->id;
+        }
+
+        return $out;
+    }
+
+    /**
+     * The templates of the core that carry each of a list of competencies, in one reading (T-90 lot 4).
+     *
+     * What a template is named is the offer of training, not a fact about a person. A hidden template is returned with
+     * visible = 0, never left out; its name is the core's secret unless the reader may manage templates (see
+     * can_view_hidden_templates()), and the caller decides. Names are raw, and put in order by the collator rather than
+     * by the database, for the reason courses_with_competency() gives.
+     *
+     * @param int[] $competencyids
+     * @return \stdClass[][] Competency id => templates keyed by template id, name order: templateid, shortname, visible.
+     *                       A competency no template carries has no key.
+     */
+    public function templates_with_competencies(array $competencyids): array {
+        global $DB;
+
+        if (!$competencyids) {
+            return [];
+        }
+        [$insql, $params] = $DB->get_in_or_equal(array_values($competencyids), SQL_PARAMS_NAMED, 'comp');
+        $rows = $DB->get_records_sql(
+            "SELECT tc.id, tc.competencyid, t.id AS templateid, t.shortname, t.visible
+               FROM {competency_templatecomp} tc
+               JOIN {competency_template} t ON t.id = tc.templateid
+              WHERE tc.competencyid $insql",
+            $params
+        );
+        $out = [];
+        foreach ($rows as $row) {
+            $out[(int) $row->competencyid][(int) $row->templateid] = (object) [
+                'templateid' => (int) $row->templateid,
+                'shortname' => (string) $row->shortname,
+                'visible' => (int) $row->visible,
+            ];
+        }
+        foreach ($out as &$templates) {
+            \core_collator::asort_objects_by_property($templates, 'shortname');
+        }
+
+        return $out;
+    }
+
+    /**
+     * Whether the current user may see the name of a hidden template (T-90 lot 4).
+     *
+     * The core lists hidden templates to who may manage them and to nobody else, and asks it at the system level
+     * (api::list_templates_using_competency): moodle/competency:templatemanage.
+     *
+     * @return bool
+     */
+    public static function can_view_hidden_templates(): bool {
+        return has_capability('moodle/competency:templatemanage', \context_system::instance());
+    }
+
+    /**
+     * How many learning plans name a competency of each of a list of frameworks, for some people (T-90 lot 4).
+     *
+     * A number of PLANS, each counted once per framework however many of its competencies are there; no id of a person,
+     * no name of a plan and no status leaves this method. Every plan counts, drafts included (decision of the owner,
+     * 4 November 2026: the page shows a count, never a name, and the drafts are counted with the rest). The
+     * competencies of a plan are read where the core reads them, the three places being exclusive: a complete plan
+     * from its archive (competency_usercompplan, by plan AND user), a plan on a template from the template's list, any
+     * other from its own list. The archive row carries a grade and a proficiency: neither is read (D-1).
+     *
+     * The people are cut in lists of 1000: a plan belongs to one person, so the counts of the cuts are added.
+     *
+     * @param int[] $userids The people whose plans are counted.
+     * @return int[] Framework id => number of plans. A framework no plan names has no key.
+     */
+    public function plan_counts_of_frameworks(array $userids): array {
+        global $DB;
+
+        $userids = array_values(array_unique(array_map('intval', $userids)));
+        $out = [];
+        foreach (array_chunk($userids, 1000) as $chunk) {
+            [$insql1, $params1] = $DB->get_in_or_equal($chunk, SQL_PARAMS_NAMED, 'pua');
+            [$insql2, $params2] = $DB->get_in_or_equal($chunk, SQL_PARAMS_NAMED, 'pub');
+            [$insql3, $params3] = $DB->get_in_or_equal($chunk, SQL_PARAMS_NAMED, 'puc');
+            $rows = $DB->get_records_sql(
+                "SELECT u.frameworkid, COUNT(DISTINCT u.planid) AS plans
+                   FROM (SELECT c.competencyframeworkid AS frameworkid, p.id AS planid
+                           FROM {competency_plan} p
+                           JOIN {competency_usercompplan} ucp ON ucp.planid = p.id AND ucp.userid = p.userid
+                           JOIN {competency} c ON c.id = ucp.competencyid
+                          WHERE p.userid $insql1 AND p.status = :complete1
+                          UNION
+                         SELECT c.competencyframeworkid AS frameworkid, p.id AS planid
+                           FROM {competency_plan} p
+                           JOIN {competency_templatecomp} tc ON tc.templateid = p.templateid
+                           JOIN {competency} c ON c.id = tc.competencyid
+                          WHERE p.userid $insql2 AND p.status <> :complete2
+                                AND p.templateid IS NOT NULL AND p.templateid <> 0
+                          UNION
+                         SELECT c.competencyframeworkid AS frameworkid, p.id AS planid
+                           FROM {competency_plan} p
+                           JOIN {competency_plancomp} pc ON pc.planid = p.id
+                           JOIN {competency} c ON c.id = pc.competencyid
+                          WHERE p.userid $insql3 AND p.status <> :complete3
+                                AND (p.templateid IS NULL OR p.templateid = 0)) u
+               GROUP BY u.frameworkid",
+                $params1 + $params2 + $params3
+                    + ['complete1' => self::PLAN_COMPLETE, 'complete2' => self::PLAN_COMPLETE, 'complete3' => self::PLAN_COMPLETE]
+            );
+            foreach ($rows as $row) {
+                $out[(int) $row->frameworkid] = ($out[(int) $row->frameworkid] ?? 0) + (int) $row->plans;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Whether the current user may see a hidden course, and so its name (T-90).
+     *
+     * The core shows a hidden course to who holds moodle/course:viewhiddencourses in it, and to nobody else: the name
+     * of a course the teacher has not opened can be a working title. Asked once per course by the caller.
+     *
+     * @param int $courseid
+     * @return bool
+     */
+    public static function can_view_hidden_course(int $courseid): bool {
+        $context = \context_course::instance($courseid, IGNORE_MISSING);
+
+        return $context && has_capability('moodle/course:viewhiddencourses', $context);
+    }
+
+    /**
+     * Whether the current user may see which competencies a course carries, as the core decides it (T-90).
+     *
+     * The rule is that of api::list_courses_using_competency(), word for word: coursecompetencyview, or
+     * coursecompetencymanage, in the course. The user archetype holds the first by default, so on a standard site
+     * every signed-in account reads the list; a site that withdraws it from its learners, in a course or a category,
+     * keeps the link between that course and its competencies from them, here as in the core - but for one bit: the
+     * pathway says "not readable" where every course carrying the competency is withheld, so that it does not say
+     * "none" over courses that exist. Neither name, number nor address of such a course comes out. The core's other test
+     * on a course, its visibility, is the caller's: a hidden course is listed without its name and not left out
+     * (decision of 2 November 2026). Asked once per course by the caller.
+     *
+     * @param int $courseid
+     * @return bool False for a course that does not exist.
+     */
+    public static function can_view_course_competencies(int $courseid): bool {
+        $context = \context_course::instance($courseid, IGNORE_MISSING);
+
+        return $context && has_any_capability(
+            ['moodle/competency:coursecompetencyview', 'moodle/competency:coursecompetencymanage'],
+            $context
+        );
+    }
+
+    /**
+     * Whether the current user may see which competencies an activity carries, as the core decides it (T-90 lot 1 bis).
+     *
+     * The rule is that of api::list_course_module_competencies(), without its first test: coursecompetencyview, or
+     * coursecompetencymanage, in the context of the module. The core's first test, that the module be visible to the
+     * reader, is the caller's: an activity the reader cannot see is listed without its name and not left out, as a
+     * hidden course is. Asked once per activity by the caller.
+     *
+     * @param int $cmid
+     * @return bool False for an activity that does not exist.
+     */
+    public static function can_view_module_competencies(int $cmid): bool {
+        $context = \context_module::instance($cmid, IGNORE_MISSING);
+
+        return $context && has_any_capability(
+            ['moodle/competency:coursecompetencyview', 'moodle/competency:coursecompetencymanage'],
+            $context
+        );
+    }
+
+    /**
+     * Whether the current user may read a person's learning plans, as the core decides it (T-90).
+     *
+     * The rule is plan::can_read_user(), word for word: planview in that person's context, plus planviewown on
+     * oneself, or whoever may manage the plans (plan::can_manage_user(): planmanage, plus planmanageown on
+     * oneself). The user archetype holds planviewown by default and a site may withdraw it; the manager archetype
+     * holds planview - a site manager reads everyone's plans here as in the core, a manager of this plugin only if
+     * the site gave it (conception T-90, § 4.3). The plugin opens no plan the core would not, and hides none it
+     * lists: a reader who holds the right on drafts and not this one reads their drafts alone, as the core lists
+     * them (see can_view_draft_plans_of() and list_user_plans()). The names of the core's capabilities are kept in
+     * this class, as every name of the competency subsystem is.
+     *
+     * @param int $userid The person whose plans would be read.
+     * @return bool
+     */
+    public static function can_view_plans_of(int $userid): bool {
+        global $USER;
+
+        $capabilities = ['moodle/competency:planview', 'moodle/competency:planmanage'];
+        if ($userid === (int) $USER->id) {
+            $capabilities[] = 'moodle/competency:planviewown';
+            $capabilities[] = 'moodle/competency:planmanageown';
+        }
+
+        return has_any_capability($capabilities, \context_user::instance($userid));
+    }
+
+    /**
+     * Whether the current user may read a person's draft plans too (T-90).
+     *
+     * The drafts - draft, waiting for review, in review - are the core's secret: planviewowndraft for
+     * oneself, which no role holds by default, planviewdraft for another - and whoever may manage the drafts
+     * (planmanagedraft, plus planmanageowndraft on oneself), word for word plan::can_read_user_draft().
+     *
+     * @param int $userid The person whose plans would be read.
+     * @return bool
+     */
+    public static function can_view_draft_plans_of(int $userid): bool {
+        global $USER;
+
+        $capabilities = ['moodle/competency:planviewdraft', 'moodle/competency:planmanagedraft'];
+        if ($userid === (int) $USER->id) {
+            $capabilities[] = 'moodle/competency:planviewowndraft';
+            $capabilities[] = 'moodle/competency:planmanageowndraft';
+        }
+
+        return has_any_capability($capabilities, \context_user::instance($userid));
+    }
+
+    /**
+     * The status of a learning plan, in the words of the core.
+     *
+     * The screen never invents a word for a plan: brouillon, actif, terminé and the two review
+     * states are the core's, in the user's language. A number the core does not know is given back
+     * as it is, so that nothing is said that is not in the row.
+     *
+     * @param int $status One of the PLAN_* constants.
+     * @return string
+     */
+    public static function plan_status_label(int $status): string {
+        $words = [
+            self::PLAN_DRAFT => 'draft',
+            self::PLAN_ACTIVE => 'active',
+            self::PLAN_COMPLETE => 'complete',
+            self::PLAN_WAITING_FOR_REVIEW => 'waitingforreview',
+            self::PLAN_IN_REVIEW => 'inreview',
+        ];
+        if (!isset($words[$status])) {
+            return (string) $status;
+        }
+
+        return get_string('planstatus' . $words[$status], self::SUBSYSTEM);
     }
 }

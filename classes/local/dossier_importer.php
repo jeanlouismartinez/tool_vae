@@ -437,6 +437,9 @@ final class dossier_importer {
             'validation' => $this->validation($files),
             'reflexion' => $this->reflexion($files),
             'scope' => $this->scope($files),
+            'positioning' => $this->positioning($files),
+            'selfpositioning' => $this->selfpositioning($files),
+            'situations' => $this->situations($files),
             'pieces' => $this->pieces($files, $claims),
         ];
     }
@@ -780,6 +783,829 @@ final class dossier_importer {
     }
 
     /**
+     * The self-positioning of the vaeiste an archive carries, checked whole (lot 1a).
+     *
+     * The file is optional. When it is there it goes by the schema, then by what the schema cannot say: the bound the plugin
+     * holds for the whole file, an identifier that is not there twice, a justification the plugin would have accepted (kept
+     * as it was written, of the length it allows, with no control character), a fingerprint that is the one of the line it
+     * sits on, dates in order, a withdrawal that takes back a level given before it, and exactly one line that stands for each
+     * key - the last. A refusal names the line, never trims it.
+     *
+     * @param string[] $files path => content, already checked against the manifest.
+     * @return \stdClass[] uuid, fichecode, ficherang, level, levellabel, justification, format, hash, writtenat, in the order
+     *         of the archive.
+     * @throws \moodle_exception errorarchiveselfpos
+     */
+    private function selfpositioning(array $files): array {
+        if (!isset($files[selfpos_archive::PATH])) {
+            return [];
+        }
+
+        try {
+            $data = json_decode($files[selfpos_archive::PATH], false, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException $e) {
+            throw new \moodle_exception('errorarchiveselfpos', 'tool_vae', '', 'JSON');
+        }
+        $errors = $this->validator->validate($data, 'autopositionnement.schema.json');
+        if ($errors) {
+            throw new \moodle_exception('errorarchiveselfpos', 'tool_vae', '', s(reset($errors)));
+        }
+        if (count($data->lignes) > selfpos_archive::MAX_LINES) {
+            throw new \moodle_exception('errorarchiveselfpos', 'tool_vae', '', '/lignes');
+        }
+
+        $formats = array_flip(selfpos_archive::FORMATS);
+        $out = [];
+        $seen = [];
+        $last = [];
+        $latest = [];
+        $previous = [];
+        $now = time();
+        foreach ($data->lignes as $index => $entry) {
+            // The record code is the archive's own, and shown as HTML in the refusal.
+            $where = s("/lignes/$index");
+            $level = (int) $entry->palier;
+            try {
+                $clean = positioning_rules::clean_text($entry->justification, selfpos_manager::MAX_LENGTH);
+            } catch (\moodle_exception $e) {
+                throw new \moodle_exception('errorarchiveselfpos', 'tool_vae', '', $where . ' justification');
+            }
+            $hash = positioning_rules::hash([$level, $entry->libelle, $entry->fiche, $entry->rang, $entry->justification]);
+            // The schema admits a UUID v4 as any identifier of the archive; the table holds a ULID of 26 characters.
+            if (
+                isset($seen[$entry->identifiant])
+                || !identity_map::is_valid_ulid((string) $entry->identifiant)
+                || $clean !== $entry->justification
+                || !isset($formats[$entry->format])
+                || !hash_equals($hash, $entry->empreinte)
+            ) {
+                throw new \moodle_exception('errorarchiveselfpos', 'tool_vae', '', $where);
+            }
+            $seen[$entry->identifiant] = true;
+            $writtenat = self::timestamp($entry->ecrit_le);
+            $keyof = $entry->fiche . "\x1f" . $entry->rang;
+            // The latest line of a key stands by its time: a time after this very moment, before the year 2000, or earlier
+            // than the line before it in the file would let a restored line hide every line written here afterwards.
+            if ($writtenat > $now || $writtenat < 946684800 || $writtenat < ($latest[$keyof] ?? 0)) {
+                throw new \moodle_exception('errorarchiveselfpos', 'tool_vae', '', $where . ' ecrit_le');
+            }
+            // A withdrawal takes back a level that stands: write() refuses one with nothing before it, or after another.
+            $before = $previous[$keyof] ?? selfpos_manager::WITHDRAWN;
+            if ($level === selfpos_manager::WITHDRAWN && $before === selfpos_manager::WITHDRAWN) {
+                throw new \moodle_exception('errorarchiveselfpos', 'tool_vae', '', $where . ' palier');
+            }
+            $previous[$keyof] = $level;
+            $latest[$keyof] = $writtenat;
+            $last[$keyof] = $index;
+
+            $out[] = (object) [
+                'uuid' => $entry->identifiant,
+                'fichecode' => $entry->fiche,
+                'ficherang' => $entry->rang,
+                'level' => $level,
+                'levellabel' => $entry->libelle,
+                'justification' => $entry->justification,
+                'format' => $formats[$entry->format],
+                'hash' => $entry->empreinte,
+                'writtenat' => $writtenat,
+            ];
+        }
+        // Exactly the last line of each key says that it stands.
+        foreach ($data->lignes as $index => $entry) {
+            if ($entry->fait_foi !== ($last[$entry->fiche . "\x1f" . $entry->rang] === $index)) {
+                throw new \moodle_exception('errorarchiveselfpos', 'tool_vae', '', s("/lignes/$index fait_foi"));
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * The work situations, their pieces, the annotations and the consents an archive carries, checked whole (lot 1b).
+     *
+     * The file is optional. When it is there it goes by the schema, then by what the schema cannot say: the bounds the plugin
+     * holds for the whole file (D-1b-J: eight hundred lines of consent, twice the consents given, and the flood bound of the
+     * annotations - a situation or a target over its own bound is not refused here, it is left at the restoration), a
+     * withdrawal of consent that follows a consent given to the same manager and not taken back yet (T15 tour 2: what bounds
+     * the lines to twice the consents given), an identifier that is not there twice,
+     * an address (record, slot) that is not there twice - which, with the slot of 1 to 30 the schema holds, is what bounds the
+     * situations to thirty per record (T15, point B: the bound is per vaeiste and record, never on the file) - a title, a
+     * setting, a text, a part the plugin would have accepted, the fingerprint of every version and every annotation, dates in
+     * order, a withdrawal that names an annotation of the file by the same author on the same target, the bytes of a file
+     * that are the ones the archive says. A refusal names the line, never trims it.
+     *
+     * @param string[] $files path => content, already checked against the manifest.
+     * @return \stdClass|null situations, pieces, notes, consents (as situation_archive::restore() takes them), bytes (the
+     *         bytes of the files to write); null when the file is not there.
+     * @throws \moodle_exception errorarchivesituations, errorarchivepiecesclosed
+     */
+    private function situations(array $files): ?\stdClass {
+        $folder = array_filter(array_keys($files), fn($path) => strpos($path, situation_archive::FOLDER) === 0);
+        if (!isset($files[situation_archive::PATH])) {
+            if ($folder) {
+                self::refuse_situations(s(reset($folder)));
+            }
+
+            return null;
+        }
+
+        try {
+            $data = json_decode($files[situation_archive::PATH], false, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException $e) {
+            self::refuse_situations('JSON');
+        }
+        $errors = $this->validator->validate($data, 'situations.schema.json');
+        if ($errors) {
+            self::refuse_situations(s(reset($errors)));
+        }
+        if (count($data->accords) > situation_archive::MAX_CONSENT_LINES) {
+            self::refuse_situations('/accords');
+        }
+        if (count($data->annotations) > situation_archive::MAX_NOTE_LINES) {
+            self::refuse_situations('/annotations');
+        }
+
+        [$pieces, $bytes] = self::situation_pieces($data->pieces, $files, $folder);
+
+        return (object) [
+            'situations' => self::situation_entries($data->situations),
+            'pieces' => $pieces,
+            'notes' => self::situation_notes($data->annotations),
+            'consents' => self::situation_consents($data->accords),
+            'bytes' => $bytes,
+            'hashes' => [],
+        ];
+    }
+
+    /**
+     * Refuse situations.json by the name of what is wrong.
+     *
+     * @param string $where Already escaped where it carries a value of the archive.
+     * @throws \moodle_exception errorarchivesituations
+     */
+    private static function refuse_situations(string $where): never {
+        throw new \moodle_exception('errorarchivesituations', 'tool_vae', '', $where);
+    }
+
+    /**
+     * Whether a moment is one a line could have been written at: not after this very moment, not before the year 2000.
+     *
+     * @param int $time
+     * @param int $now
+     * @return bool
+     */
+    private static function recent(int $time, int $now): bool {
+        return $time <= $now && $time >= 946684800;
+    }
+
+    /**
+     * The checks a piece of an archive goes through whatever it backs - a declaration (pieces()) or a work situation
+     * (situation_pieces()): a removal that does not precede the attachment, what the genre allows and what a removal leaves,
+     * an address and a title the plugin would have accepted from the vaeiste and no other, the bytes of a file that are the
+     * ones the archive says (name, size, ceiling, digest), read for their type and scanned when attaching is open here.
+     *
+     * @param \stdClass $piece The entry of the archive.
+     * @param string $id Its identifier, as the file names its bytes.
+     * @param string $folder The folder of the bytes in the archive.
+     * @param string $where The JSON pointer of the entry.
+     * @param string[] $files path => content.
+     * @param true[] $used The paths of the folder already claimed by a piece, added to.
+     * @param bool $open Whether attaching is open here.
+     * @param string $errorcode The refusal of this file.
+     * @return \stdClass bytes (string|null), ext (string|null), addedat (int), removedat (int|null), restorable (bool: the
+     *         piece has something to restore - bytes, an address).
+     * @throws \moodle_exception $errorcode
+     */
+    private static function check_piece(
+        \stdClass $piece,
+        string $id,
+        string $folder,
+        string $where,
+        array $files,
+        array &$used,
+        bool $open,
+        string $errorcode
+    ): \stdClass {
+        $refuse = function (string $detail) use ($errorcode): never {
+            throw new \moodle_exception($errorcode, 'tool_vae', '', $detail);
+        };
+        $removed = isset($piece->retiree_le);
+        $isfile = $piece->genre === 'fichier';
+
+        // Dates that agree with each other.
+        $added = self::timestamp($piece->ajoutee_le);
+        $gone = $removed ? self::timestamp($piece->retiree_le) : null;
+        if ($removed && $gone < $added) {
+            $refuse("$where /retiree_le");
+        }
+
+        // What the genre allows, and what a removal leaves.
+        $hasfileprops = isset($piece->type) || isset($piece->taille) || isset($piece->sha256);
+        if (
+            ($isfile && (!isset($piece->type, $piece->taille, $piece->sha256) || isset($piece->adresse)))
+            || (!$isfile && ($hasfileprops || isset($piece->fichier)))
+            || ($removed && (isset($piece->fichier) || isset($piece->adresse) || isset($piece->intitule)))
+        ) {
+            $refuse("$where /genre");
+        }
+
+        // An address and a title the plugin would have accepted from the candidate, and no other.
+        try {
+            if (isset($piece->adresse) && piece_manager::validate_url($piece->adresse)[0] !== $piece->adresse) {
+                throw new \moodle_exception('errorpieceurl', 'tool_vae');
+            }
+            if (isset($piece->intitule) && piece_manager::clean_title($piece->intitule) !== $piece->intitule) {
+                throw new \moodle_exception('errorpiecetitle', 'tool_vae', '', piece_manager::TITLE_MAXLENGTH);
+            }
+        } catch (\moodle_exception $e) {
+            $refuse("$where " . s($e->getMessage()));
+        }
+
+        $bytes = null;
+        $ext = $isfile ? (string) array_search($piece->type, piece_manager::TYPES, true) : null;
+        if (isset($piece->fichier)) {
+            $path = $folder . $id . '.' . $ext;
+            if ($piece->fichier !== $path || !array_key_exists($path, $files) || isset($used[$path])) {
+                $refuse("$where /fichier");
+            }
+            $used[$path] = true;
+            $bytes = $files[$path];
+            if (
+                strlen($bytes) !== $piece->taille
+                || $piece->taille > piece_manager::CANDIDATE_CEILING
+                || !hash_equals($piece->sha256, hash('sha256', $bytes))
+            ) {
+                $refuse("$where /sha256");
+            }
+
+            // The door a person's file goes through: the type read on the content, the same as the archive says, and the
+            // antivirus. Not asked when attaching is closed here: nothing will be written, and the archive is refused by the
+            // caller if it had pieces to bring.
+            if ($open) {
+                $temp = make_request_directory() . '/piece';
+                file_put_contents($temp, $bytes);
+                try {
+                    [$detected] = piece_manager::detect_type($temp);
+                    if ($detected !== $ext) {
+                        $refuse("$where /type");
+                    }
+                    piece_manager::scan($temp, 'piece.' . $ext);
+                } catch (\moodle_exception $e) {
+                    // Refused whole, by the name of the piece, whatever the door says (type, macro, virus, no antivirus).
+                    if ($e->errorcode === $errorcode) {
+                        throw $e;
+                    }
+                    $refuse("$where " . s($e->getMessage()));
+                } finally {
+                    @unlink($temp);
+                }
+            }
+        }
+
+        return (object) [
+            'bytes' => $bytes,
+            'ext' => $ext,
+            'addedat' => $added,
+            'removedat' => $gone,
+            'restorable' => $bytes !== null || isset($piece->adresse),
+        ];
+    }
+
+    /**
+     * Refuse an archive whose folder of pieces holds a file that no piece names.
+     *
+     * @param string[] $folder The paths of the archive under the folder.
+     * @param true[] $used The paths a piece claimed.
+     * @param string $errorcode The refusal of this file.
+     * @throws \moodle_exception $errorcode
+     */
+    private static function require_folder_used(array $folder, array $used, string $errorcode): void {
+        foreach ($folder as $path) {
+            if (!isset($used[$path])) {
+                throw new \moodle_exception($errorcode, 'tool_vae', '', s($path));
+            }
+        }
+    }
+
+    /**
+     * The pieces of the situations, checked as those of the declarations are (check_piece()), their dates within bounds.
+     *
+     * @param \stdClass[] $entries The entries of the file.
+     * @param string[] $files path => content.
+     * @param string[] $folder The paths of the archive under situation_archive::FOLDER.
+     * @return array [plan (entry, bytes, ext, addedat, removedat), the bytes to write]
+     * @throws \moodle_exception errorarchivesituations, errorarchivepiecesclosed
+     */
+    private static function situation_pieces(array $entries, array $files, array $folder): array {
+        $open = piece_manager::is_open();
+        $plan = [];
+        $seen = [];
+        $used = [];
+        $restorable = false;
+        $incoming = 0;
+        $now = time();
+        foreach ($entries as $index => $piece) {
+            $where = "/pieces/$index";
+            if (!identity_map::is_valid_ulid((string) $piece->identifiant) || isset($seen[$piece->identifiant])) {
+                self::refuse_situations(s("$where " . $piece->identifiant));
+            }
+            $seen[$piece->identifiant] = true;
+            $checked = self::check_piece(
+                $piece,
+                (string) $piece->identifiant,
+                situation_archive::FOLDER,
+                $where,
+                $files,
+                $used,
+                $open,
+                'errorarchivesituations'
+            );
+            if (
+                !self::recent($checked->addedat, $now)
+                || ($checked->removedat !== null && !self::recent($checked->removedat, $now))
+            ) {
+                self::refuse_situations("$where /ajoutee_le");
+            }
+            $restorable = $restorable || $checked->restorable;
+            $incoming += $checked->bytes === null ? 0 : strlen($checked->bytes);
+
+            $plan[] = (object) [
+                'entry' => $piece,
+                'bytes' => $checked->bytes,
+                'ext' => $checked->ext,
+                'addedat' => $checked->addedat,
+                'removedat' => $checked->removedat,
+            ];
+        }
+
+        self::require_folder_used($folder, $used, 'errorarchivesituations');
+        if (!$open && $restorable) {
+            throw new \moodle_exception('errorarchivepiecesclosed', 'tool_vae');
+        }
+
+        return [$plan, $incoming];
+    }
+
+    /**
+     * The situations of the file, each checked with its versions, its draft and its links.
+     *
+     * @param \stdClass[] $entries
+     * @return \stdClass[] uuid, fichecode, slot, title, periodstart, periodend, setting, tags, versions (number, content, hash,
+     *         note, restoredfrom, writtenat, snapshot), working, links (pieceuuid, part, addedat, removedat).
+     * @throws \moodle_exception errorarchivesituations
+     */
+    private static function situation_entries(array $entries): array {
+        $out = [];
+        $seen = [];
+        $addresses = [];
+        $now = time();
+        foreach ($entries as $index => $entry) {
+            $where = s("/situations/$index");
+            if (!identity_map::is_valid_ulid((string) $entry->identifiant) || isset($seen[$entry->identifiant])) {
+                self::refuse_situations($where);
+            }
+            $seen[$entry->identifiant] = true;
+            $address = $entry->fiche . "\x1f" . $entry->emplacement;
+            if (isset($addresses[$address])) {
+                self::refuse_situations("$where emplacement");
+            }
+            $addresses[$address] = true;
+            $details = self::situation_details($entry, $where);
+
+            $versions = [];
+            $latest = 0;
+            foreach ($entry->versions as $n => $version) {
+                $vwhere = s("/situations/$index/versions/$n");
+                if ((int) $version->numero !== $n + 1) {
+                    self::refuse_situations("$vwhere numero");
+                }
+                $content = (string) $version->contenu;
+                if (
+                    !self::is_text($content)
+                    || \core_text::strlen($content) > draft_manager::CONTENT_MAXLENGTH
+                    || !hash_equals(hash('sha256', $content), (string) $version->empreinte)
+                ) {
+                    self::refuse_situations("$vwhere contenu");
+                }
+                $note = $version->note ?? null;
+                if ($note !== null && (trim($note) !== $note || preg_match('/\p{Cc}/u', $note) !== 0)) {
+                    self::refuse_situations("$vwhere note");
+                }
+                $restoredfrom = isset($version->restauree_de) ? (int) $version->restauree_de : null;
+                if ($restoredfrom !== null && $restoredfrom >= (int) $version->numero) {
+                    self::refuse_situations("$vwhere restauree_de");
+                }
+                $writtenat = self::timestamp($version->ecrit_le);
+                if (!self::recent($writtenat, $now) || $writtenat < $latest) {
+                    self::refuse_situations("$vwhere ecrit_le");
+                }
+                $latest = $writtenat;
+                $versions[] = (object) [
+                    'number' => (int) $version->numero,
+                    'content' => $content,
+                    'hash' => (string) $version->empreinte,
+                    'note' => $note,
+                    'restoredfrom' => $restoredfrom,
+                    'writtenat' => $writtenat,
+                    'snapshot' => isset($version->instantane)
+                        ? self::situation_details($version->instantane, "$vwhere instantane")
+                        : null,
+                ];
+            }
+
+            $working = $entry->brouillon ?? null;
+            if (
+                $working !== null
+                && (!self::is_text($working) || \core_text::strlen($working) > draft_manager::CONTENT_MAXLENGTH)
+            ) {
+                self::refuse_situations("$where brouillon");
+            }
+
+            $links = [];
+            $cited = [];
+            foreach ($entry->pieces as $n => $link) {
+                $lwhere = s("/situations/$index/pieces/$n");
+                if (!identity_map::is_valid_ulid((string) $link->piece) || isset($cited[$link->piece])) {
+                    self::refuse_situations($lwhere);
+                }
+                $cited[$link->piece] = true;
+                $part = (string) $link->partie;
+                if (trim($part) !== $part || preg_match('/\p{Cc}/u', $part) !== 0) {
+                    self::refuse_situations("$lwhere partie");
+                }
+                $added = self::timestamp($link->ajoutee_le);
+                $removed = isset($link->retiree_le) ? self::timestamp($link->retiree_le) : null;
+                if (
+                    !self::recent($added, $now)
+                    || ($removed !== null && (!self::recent($removed, $now) || $removed < $added))
+                ) {
+                    self::refuse_situations("$lwhere retiree_le");
+                }
+                $links[] = (object) [
+                    'pieceuuid' => (string) $link->piece, 'part' => $part, 'addedat' => $added, 'removedat' => $removed,
+                ];
+            }
+
+            $out[] = (object) ([
+                'uuid' => (string) $entry->identifiant,
+                'fichecode' => (string) $entry->fiche,
+                'slot' => (int) $entry->emplacement,
+                'versions' => $versions,
+                'working' => $working,
+                'links' => $links,
+            ] + get_object_vars($details));
+        }
+
+        return $out;
+    }
+
+    /**
+     * Whether the text of a version or a draft in progress is one the plugin keeps: valid UTF-8 without a NUL byte.
+     *
+     * The text is the vaeiste's free text, kept as typed: the keyboard filters no control character (situation_form takes it
+     * raw, draft_manager normalises the line endings alone), so a character pasted from a word processor is saved and must
+     * make the round trip (T12 tour 2). The length is bounded by the caller; the fields the keyboard does clean (title,
+     * setting, part, note, annotation) keep their stricter check.
+     *
+     * @param string $text
+     * @return bool
+     */
+    private static function is_text(string $text): bool {
+        return strpos($text, "\0") === false && preg_match('//u', $text) === 1;
+    }
+
+    /**
+     * The title, the period, the setting and the tags of a situation or of a snapshot, as the plugin would have accepted them.
+     *
+     * @param \stdClass $entry intitule, periode_debut, periode_fin, cadre, etiquettes.
+     * @param string $where Already escaped.
+     * @return \stdClass title, periodstart, periodend, setting, tags (sorted, each once).
+     * @throws \moodle_exception errorarchivesituations
+     */
+    private static function situation_details(\stdClass $entry, string $where): \stdClass {
+        try {
+            $title = piece_manager::clean_title((string) $entry->intitule);
+        } catch (\moodle_exception $e) {
+            self::refuse_situations("$where intitule");
+        }
+        if ($title !== $entry->intitule) {
+            self::refuse_situations("$where intitule");
+        }
+        $setting = trim(preg_replace('/\s+/u', ' ', clean_param((string) $entry->cadre, PARAM_TEXT)) ?? '');
+        if ($setting !== $entry->cadre) {
+            self::refuse_situations("$where cadre");
+        }
+        $start = isset($entry->periode_debut) ? self::timestamp($entry->periode_debut) : null;
+        $end = isset($entry->periode_fin) ? self::timestamp($entry->periode_fin) : null;
+        foreach (['periode_debut' => $start, 'periode_fin' => $end] as $name => $day) {
+            // A day the date selector of the site could have given: from 1800 to 2200 (bounds in situation_archive).
+            if ($day !== null && ($day < situation_archive::PERIOD_EARLIEST || $day > situation_archive::PERIOD_LATEST)) {
+                self::refuse_situations("$where $name");
+            }
+        }
+        if ($start !== null && $end !== null && $end < $start) {
+            self::refuse_situations("$where periode_fin");
+        }
+        $tags = [];
+        foreach ($entry->etiquettes as $rank) {
+            if (isset($tags[$rank])) {
+                self::refuse_situations("$where etiquettes");
+            }
+            $tags[$rank] = (string) $rank;
+        }
+        $tags = array_values($tags);
+        usort($tags, 'strnatcmp');
+
+        return (object) [
+            'title' => $title, 'periodstart' => $start, 'periodend' => $end, 'setting' => $setting, 'tags' => $tags,
+        ];
+    }
+
+    /**
+     * The annotations of the file: each line checked, a withdrawal against the annotation it names.
+     *
+     * A withdrawal takes back the word of its own author on the same target (note_manager::withdraw()): one that names an
+     * annotation the file does not hold before it, of another author or on another target, is refused - restored, it would
+     * make note_manager hold that annotation for withdrawn.
+     *
+     * @param \stdClass[] $entries
+     * @return \stdClass[] uuid, target, targetuuid, fichecode, slot, ficherang, authoruuid, text, format, state, withdraws,
+     *         hash, writtenat, in the order of the archive.
+     * @throws \moodle_exception errorarchivesituations
+     */
+    private static function situation_notes(array $entries): array {
+        $targets = array_flip(situation_archive::TARGETS);
+        $states = array_flip(situation_archive::NOTE_STATES);
+        $formats = array_flip(situation_archive::FORMATS);
+        $out = [];
+        $seen = [];
+        $active = [];
+        $withdrawn = [];
+        $latest = 0;
+        $now = time();
+        foreach ($entries as $index => $entry) {
+            $where = s("/annotations/$index");
+            if (!identity_map::is_valid_ulid((string) $entry->identifiant) || isset($seen[$entry->identifiant])) {
+                self::refuse_situations($where);
+            }
+            $seen[$entry->identifiant] = true;
+            $target = $targets[$entry->cible];
+            $slot = (int) $entry->emplacement;
+            $rank = (string) $entry->rang;
+            $targetuuid = (string) ($entry->cible_identifiant ?? '');
+            if ($target === note_manager::TARGET_SITUATION) {
+                if ($targetuuid === '' || !identity_map::is_valid_ulid($targetuuid) || $slot < 1 || $rank !== '') {
+                    self::refuse_situations("$where cible");
+                }
+            } else if ($targetuuid !== '' || $slot !== 0) {
+                self::refuse_situations("$where cible");
+            }
+            $author = $entry->auteur ?? null;
+            if ($author !== null && !identity_map::is_valid_ulid((string) $author)) {
+                self::refuse_situations("$where auteur");
+            }
+            $text = (string) $entry->texte;
+            try {
+                $clean = positioning_rules::clean_text($text, note_manager::MAX_LENGTH);
+            } catch (\moodle_exception $e) {
+                self::refuse_situations("$where texte");
+            }
+            if ($clean !== $text) {
+                self::refuse_situations("$where texte");
+            }
+            $key = implode("\x1f", [$target, $targetuuid, $entry->fiche, $slot, $rank]);
+            $withdraws = $entry->retire ?? null;
+            $state = $states[$entry->etat];
+            if ($state === note_manager::ACTIVE) {
+                if ($text === '' || $withdraws !== null) {
+                    self::refuse_situations("$where etat");
+                }
+                $hash = positioning_rules::hash([$target, $entry->fiche, $slot, $rank, $text]);
+            } else {
+                $named = $active[$withdraws] ?? null;
+                if (
+                    $text !== '' || $withdraws === null || $named === null || isset($withdrawn[$withdraws])
+                    || $named->author !== $author || $named->key !== $key
+                ) {
+                    self::refuse_situations("$where retire");
+                }
+                $withdrawn[$withdraws] = true;
+                $hash = positioning_rules::hash([$target, $entry->fiche, $slot, $rank, '', $withdraws]);
+            }
+            if (!hash_equals($hash, (string) $entry->empreinte)) {
+                self::refuse_situations("$where empreinte");
+            }
+            $writtenat = self::timestamp($entry->ecrit_le);
+            if (!self::recent($writtenat, $now) || $writtenat < $latest) {
+                self::refuse_situations("$where ecrit_le");
+            }
+            $latest = $writtenat;
+            if ($state === note_manager::ACTIVE) {
+                $active[$entry->identifiant] = (object) ['author' => $author, 'key' => $key];
+            }
+
+            $out[] = (object) [
+                'uuid' => (string) $entry->identifiant,
+                'target' => $target,
+                'targetuuid' => $targetuuid,
+                'fichecode' => (string) $entry->fiche,
+                'slot' => $slot,
+                'ficherang' => $rank,
+                'authoruuid' => $author === null ? null : (string) $author,
+                'text' => $text,
+                'format' => $formats[$entry->format],
+                'state' => $state,
+                'withdraws' => $withdraws === null ? null : (string) $withdraws,
+                'hash' => (string) $entry->empreinte,
+                'writtenat' => $writtenat,
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * The lines of consent of the file, each checked.
+     *
+     * A withdrawal takes back a consent given (consent_manager::withdraw()): in the order of the file, a line "retire" of a
+     * manager must follow a line "donne" of the same manager not taken back yet, or the file is refused - as an orphan
+     * withdrawal of an annotation is. This is what keeps the lines of a file to twice the consents given (T15 tour 2).
+     *
+     * @param \stdClass[] $entries
+     * @return \stdClass[] uuid, manageruuid, state, writtenat, in the order of the archive.
+     * @throws \moodle_exception errorarchivesituations
+     */
+    private static function situation_consents(array $entries): array {
+        $states = array_flip(situation_archive::CONSENT_STATES);
+        $out = [];
+        $seen = [];
+        $standing = [];
+        $latest = 0;
+        $now = time();
+        foreach ($entries as $index => $entry) {
+            $where = s("/accords/$index");
+            if (!identity_map::is_valid_ulid((string) $entry->identifiant) || isset($seen[$entry->identifiant])) {
+                self::refuse_situations($where);
+            }
+            $seen[$entry->identifiant] = true;
+            $manager = $entry->responsable ?? null;
+            if ($manager !== null && !identity_map::is_valid_ulid((string) $manager)) {
+                self::refuse_situations("$where responsable");
+            }
+            $state = $states[$entry->etat];
+            $key = (string) ($manager ?? '');
+            if ($state === consent_manager::WITHDRAWN) {
+                if (empty($standing[$key])) {
+                    self::refuse_situations("$where etat");
+                }
+                $standing[$key] = false;
+            } else {
+                $standing[$key] = true;
+            }
+            $writtenat = self::timestamp($entry->date);
+            if (!self::recent($writtenat, $now) || $writtenat < $latest) {
+                self::refuse_situations("$where date");
+            }
+            $latest = $writtenat;
+            $out[] = (object) [
+                'uuid' => (string) $entry->identifiant,
+                'manageruuid' => $manager === null ? null : (string) $manager,
+                'state' => $state,
+                'writtenat' => $writtenat,
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * The positionings of the structure an archive carries, checked whole (T-90, lot 3).
+     *
+     * The file is optional. When it is there it goes by the schema, then by what the schema cannot say: the bound the plugin
+     * holds for the whole file, an identifier that is not there twice, a reason the plugin would have accepted (kept as it was
+     * written, of the length it allows, with no control character), a fingerprint that is the one of the line it sits on, a day
+     * that is a day, a reason of alert only on a certification, and exactly one line that stands for each key - the last. A
+     * refusal names the line, never trims it: a line cannot be written twice, so one dropped now would never come back.
+     *
+     * @param string[] $files path => content, already checked against the manifest.
+     * @return \stdClass[] table, uuid, fichecode, ficherang, status, reason, hash, writtenat, authoruuid, decisiondate,
+     *         alertreason - the evaluations then the certifications, each in the order of the archive.
+     * @throws \moodle_exception errorarchivepositioning
+     */
+    private function positioning(array $files): array {
+        if (!isset($files[positioning_archive::PATH])) {
+            return [];
+        }
+
+        try {
+            $data = json_decode($files[positioning_archive::PATH], false, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException $e) {
+            throw new \moodle_exception('errorarchivepositioning', 'tool_vae', '', 'JSON');
+        }
+        $errors = $this->validator->validate($data, 'positionnement.schema.json');
+        if ($errors) {
+            throw new \moodle_exception('errorarchivepositioning', 'tool_vae', '', s(reset($errors)));
+        }
+        if (count($data->evaluations) + count($data->certifications) > positioning_archive::MAX_LINES) {
+            throw new \moodle_exception('errorarchivepositioning', 'tool_vae', '', '/evaluations');
+        }
+
+        $out = [];
+        $seen = [];
+        $now = time();
+        $tomorrow = gmdate('Y-m-d', $now + DAYSECS);
+        $kinds = [
+            'evaluations' => [evaluation_manager::TABLE, array_flip(positioning_archive::EVAL_STATUS), false],
+            'certifications' => [certification_manager::TABLE, array_flip(positioning_archive::CERTIF_STATUS), true],
+        ];
+        foreach ($kinds as $key => [$table, $statuses, $certif]) {
+            $last = [];
+            $latest = [];
+            $previous = [];
+            foreach ($data->$key as $index => $entry) {
+                // The record code is the archive's own, and shown as HTML in the refusal.
+                $where = s("/$key/$index");
+                $status = $statuses[$entry->statut];
+                $reason = $entry->motif;
+                $alert = $entry->motif_alerte ?? '';
+                $date = $certif ? $entry->date_decision : '';
+                $until = $entry->valable_jusqu_au ?? '';
+                try {
+                    $clean = positioning_rules::clean_reason($reason);
+                    $cleanalert = $alert === '' ? '' : positioning_rules::clean_reason($alert);
+                } catch (\moodle_exception $e) {
+                    throw new \moodle_exception('errorarchivepositioning', 'tool_vae', '', $where . ' motif');
+                }
+                $hash = positioning_rules::hash($certif
+                    ? array_merge(
+                        [$status, $entry->fiche, $entry->rang, $reason, $date, $alert],
+                        $until === '' ? [] : [$until]
+                    )
+                    : [$status, $entry->fiche, $entry->rang, $reason]);
+                if (
+                    isset($seen[$entry->identifiant])
+                    || $clean !== $reason
+                    || $cleanalert !== $alert
+                    || !hash_equals($hash, $entry->empreinte)
+                    || ($certif && (!positioning_rules::is_day($date) || strcmp($date, $tomorrow) > 0))
+                    || ($until !== '' && (
+                        !$certif
+                        || $status !== certification_manager::CERTIFIED
+                        || !positioning_rules::is_day($until)
+                        || strcmp($until, $date) < 0
+                        || strcmp($until, positioning_rules::LATEST_DAY) > 0
+                    ))
+                    || ($certif && $alert !== '' && $status !== certification_manager::CERTIFIED)
+                    || (!$certif && $entry->rang === '')
+                ) {
+                    throw new \moodle_exception('errorarchivepositioning', 'tool_vae', '', $where);
+                }
+                $seen[$entry->identifiant] = true;
+                $writtenat = self::timestamp($entry->ecrit_le);
+                $keyof = $entry->fiche . "\x1f" . $entry->rang;
+                // The latest line of a key stands by its time: a time after this very moment, before the year 2000, or earlier
+                // than the line before it in the file would let a restored line hide every line written here afterwards.
+                if ($writtenat > $now || $writtenat < 946684800 || $writtenat < ($latest[$keyof] ?? 0)) {
+                    throw new \moodle_exception('errorarchivepositioning', 'tool_vae', '', $where . ' ecrit_le');
+                }
+                // A withdrawal takes back a line that stands: write() refuses one with nothing before it, or after another.
+                if (
+                    $status === positioning_rules::WITHDRAWN
+                    && ($previous[$keyof] ?? positioning_rules::WITHDRAWN) === positioning_rules::WITHDRAWN
+                ) {
+                    throw new \moodle_exception('errorarchivepositioning', 'tool_vae', '', $where . ' statut');
+                }
+                $previous[$keyof] = $status;
+                $latest[$keyof] = $writtenat;
+                $last[$keyof] = $index;
+
+                $out[] = (object) [
+                    'table' => $table,
+                    'uuid' => $entry->identifiant,
+                    'fichecode' => $entry->fiche,
+                    'ficherang' => $entry->rang,
+                    'status' => $status,
+                    'reason' => $reason,
+                    'hash' => $entry->empreinte,
+                    'writtenat' => $writtenat,
+                    'authoruuid' => $entry->auteur ?? null,
+                    'decisiondate' => $date,
+                    'alertreason' => $alert === '' ? null : $alert,
+                    'validuntil' => $until,
+                ];
+            }
+            // Exactly the last line of each key says that it stands.
+            foreach ($data->$key as $index => $entry) {
+                if ($entry->fait_foi !== ($last[$entry->fiche . "\x1f" . $entry->rang] === $index)) {
+                    throw new \moodle_exception('errorarchivepositioning', 'tool_vae', '', s("/$key/$index fait_foi"));
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    /**
      * The supporting pieces an archive carries, checked whole (T-13, lot 3).
      *
      * The file is optional. When it is there it goes by the schema, then by what the schema cannot say: an identifier this plugin
@@ -855,7 +1681,6 @@ final class dossier_importer {
             }
 
             $removed = isset($piece->retiree_le);
-            $isfile = $piece->genre === 'fichier';
 
             // The bounds the code holds for a person, not those a site sets.
             $rows[$piece->preuve] = ($rows[$piece->preuve] ?? 0) + 1;
@@ -864,94 +1689,34 @@ final class dossier_importer {
                 throw new \moodle_exception('errorarchivepieces', 'tool_vae', '', "$where /preuve");
             }
 
-            // Dates that agree with each other and with the signature that is said to have covered the piece.
-            $added = self::timestamp($piece->ajoutee_le);
-            $gone = $removed ? self::timestamp($piece->retiree_le) : null;
-            if ($removed && $gone < $added) {
-                throw new \moodle_exception('errorarchivepieces', 'tool_vae', '', "$where /retiree_le");
-            }
+            // The checks every piece of an archive goes through (the pieces of the situations too).
+            $checked = self::check_piece(
+                $piece,
+                (string) $piece->id,
+                piece_overview::FOLDER,
+                $where,
+                $files,
+                $used,
+                $open,
+                'errorarchivepieces'
+            );
+
+            // Dates that agree with the signature that is said to have covered the piece.
             if (isset($piece->couverte_par)) {
                 if (!array_key_exists($piece->couverte_par, $inforce[$piece->preuve])) {
                     throw new \moodle_exception('errorarchivepieces', 'tool_vae', '', "$where /couverte_par");
                 }
                 $signed = $inforce[$piece->preuve][$piece->couverte_par];
-                if ($added > $signed || ($removed && $gone < $signed)) {
+                if ($checked->addedat > $signed || ($removed && $checked->removedat < $signed)) {
                     throw new \moodle_exception('errorarchivepieces', 'tool_vae', '', "$where /couverte_par");
                 }
             }
+            $restorable = $restorable || $checked->restorable;
 
-            // What the genre allows, and what a removal leaves.
-            $hasfileprops = isset($piece->type) || isset($piece->taille) || isset($piece->sha256);
-            if (
-                ($isfile && (!isset($piece->type, $piece->taille, $piece->sha256) || isset($piece->adresse)))
-                || (!$isfile && ($hasfileprops || isset($piece->fichier)))
-                || ($removed && (isset($piece->fichier) || isset($piece->adresse) || isset($piece->intitule)))
-            ) {
-                throw new \moodle_exception('errorarchivepieces', 'tool_vae', '', "$where /genre");
-            }
-
-            // An address and a title the plugin would have accepted from the candidate, and no other.
-            try {
-                if (isset($piece->adresse) && piece_manager::validate_url($piece->adresse)[0] !== $piece->adresse) {
-                    throw new \moodle_exception('errorpieceurl', 'tool_vae');
-                }
-                if (isset($piece->intitule) && piece_manager::clean_title($piece->intitule) !== $piece->intitule) {
-                    throw new \moodle_exception('errorpiecetitle', 'tool_vae', '', piece_manager::TITLE_MAXLENGTH);
-                }
-            } catch (\moodle_exception $e) {
-                throw new \moodle_exception('errorarchivepieces', 'tool_vae', '', "$where " . s($e->getMessage()));
-            }
-
-            $bytes = null;
-            $ext = $isfile ? (string) array_search($piece->type, piece_manager::TYPES, true) : null;
-            if (isset($piece->fichier)) {
-                $path = piece_overview::FOLDER . $piece->id . '.' . $ext;
-                if ($piece->fichier !== $path || !array_key_exists($path, $files) || isset($used[$path])) {
-                    throw new \moodle_exception('errorarchivepieces', 'tool_vae', '', "$where /fichier");
-                }
-                $used[$path] = true;
-                $bytes = $files[$path];
-                if (
-                    strlen($bytes) !== $piece->taille
-                    || $piece->taille > piece_manager::CANDIDATE_CEILING
-                    || !hash_equals($piece->sha256, hash('sha256', $bytes))
-                ) {
-                    throw new \moodle_exception('errorarchivepieces', 'tool_vae', '', "$where /sha256");
-                }
-
-                // The door a person's file goes through: the type read on the content, the same as the archive says, and the
-                // antivirus. Not asked when attaching is closed here: nothing will be written, and the archive is refused below
-                // if it had pieces to bring.
-                if ($open) {
-                    $temp = make_request_directory() . '/piece';
-                    file_put_contents($temp, $bytes);
-                    try {
-                        [$detected] = piece_manager::detect_type($temp);
-                        if ($detected !== $ext) {
-                            throw new \moodle_exception('errorarchivepieces', 'tool_vae', '', "$where /type");
-                        }
-                        piece_manager::scan($temp, 'piece.' . $ext);
-                    } catch (\moodle_exception $e) {
-                        // Refused whole, by the name of the piece, whatever the door says (type, macro, virus, no antivirus).
-                        if ($e->errorcode === 'errorarchivepieces') {
-                            throw $e;
-                        }
-                        throw new \moodle_exception('errorarchivepieces', 'tool_vae', '', "$where " . s($e->getMessage()));
-                    } finally {
-                        @unlink($temp);
-                    }
-                }
-            }
-            $restorable = $restorable || $bytes !== null || isset($piece->adresse);
-
-            $plan[] = (object) ['entry' => $piece, 'bytes' => $bytes, 'ext' => $ext];
+            $plan[] = (object) ['entry' => $piece, 'bytes' => $checked->bytes, 'ext' => $checked->ext];
         }
 
-        foreach ($folder as $path) {
-            if (!isset($used[$path])) {
-                throw new \moodle_exception('errorarchivepieces', 'tool_vae', '', s($path));
-            }
-        }
+        self::require_folder_used($folder, $used, 'errorarchivepieces');
 
         // Nothing is dropped in silence: a declaration cannot be imported twice, so what is dropped now never comes back.
         if (!$open && $restorable) {
@@ -1030,6 +1795,12 @@ final class dossier_importer {
         $reflexionkept = 0;
         $scoperestored = 0;
         $scopeleft = 0;
+        $positioningrestored = 0;
+        $positioningleft = 0;
+        $selfposrestored = 0;
+        $selfposleft = 0;
+        $situationsrestored = 0;
+        $situationsleft = 0;
         $piecesrestored = 0;
         $piecesleft = 0;
         $written = [];
@@ -1197,6 +1968,14 @@ final class dossier_importer {
                 }
             }
 
+            // The positionings of the structure (T-90, lot 3): the lines come back key by key, all or nothing, and a key that
+            // holds a line here is left as it is.
+            [$positioningrestored, $positioningleft] = positioning_archive::restore($candidateid, $plan->positioning, $now);
+
+            // The self-positioning of the vaeiste (lot 1a): line by line, a line already here or on a node this site cannot
+            // name is left as it is.
+            [$selfposrestored, $selfposleft] = selfpos_archive::restore($candidateid, $plan->selfpositioning, $now);
+
             // The supporting pieces (T-13, lot 3). Restored only when attaching is open here, and only what has something to
             // restore: a file with its bytes, a link with its address, a removed piece (its trace). A piece the archive lists
             // without its bytes or its address - the export of a third party - is counted and left. Never over an existing
@@ -1204,12 +1983,18 @@ final class dossier_importer {
             $open = piece_manager::is_open();
             $context = \context_user::instance($candidateid);
             // What the candidate keeps, with what comes: the ceiling an archive tolerates, held for a person and for an import.
-            $incoming = 0;
+            $incoming = $plan->situations->bytes ?? 0;
             foreach ($plan->pieces as $item) {
                 $incoming += $item->bytes === null ? 0 : strlen($item->bytes);
             }
             if ($open && piece_manager::used_bytes($candidateid) + $incoming > piece_manager::CANDIDATE_CEILING) {
                 throw new \moodle_exception('errorarchivepieces', 'tool_vae', '', display_size(piece_manager::CANDIDATE_CEILING));
+            }
+
+            // The work situations, their pieces, the annotations and the consents (lot 1b): the pieces first, then each
+            // situation whole or left, then the lines target by target, a restored line naming no account of this site.
+            if ($plan->situations !== null) {
+                [$situationsrestored, $situationsleft] = situation_archive::restore($candidateid, $plan->situations, $now);
             }
             foreach ($plan->pieces as $item) {
                 $piece = $item->entry;
@@ -1269,7 +2054,7 @@ final class dossier_importer {
             try {
                 $transaction->rollback($e);
             } catch (\Throwable $rethrown) {
-                foreach ($hashes as $hash) {
+                foreach (array_merge($hashes, $plan->situations->hashes ?? []) as $hash) {
                     try {
                         $fs->get_file_system()->remove_file($hash);
                     } catch (\Throwable $ignored) {
@@ -1288,6 +2073,12 @@ final class dossier_importer {
             'reflexiongardees' => $reflexionkept,
             'horsactivite' => $scoperestored,
             'horsactivitelaissees' => $scopeleft,
+            'positionnement' => $positioningrestored,
+            'positionnementlaissees' => $positioningleft,
+            'autopositionnement' => $selfposrestored,
+            'autopositionnementlaissees' => $selfposleft,
+            'situations' => $situationsrestored,
+            'situationslaissees' => $situationsleft,
             'validation' => $validationrestored,
             'validationgardees' => $validationkept,
             'declarations' => $declarations,

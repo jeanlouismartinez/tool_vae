@@ -30,6 +30,36 @@ namespace tool_vae\local;
  */
 final class candidate_overview {
     /**
+     * The blocs a reader may narrow the counts to, and the choice they made among them (T-23, T-90).
+     *
+     * The choice is checked against the reader's own list, so a value from the address bar names nothing they are not
+     * referent of. Narrowing changes what is counted, never who is listed nor what the reader may read. One rule for
+     * the two pages that offer it.
+     *
+     * @param int $readerid The reader whose referent blocs are offered.
+     * @param string $chosen The value asked for: "fichecode" or "fichecode|ficherang".
+     * @return \stdClass choices (key => row of referent_manager::for_user), chosen (the key when it is among the
+     *         choices, otherwise ''), fichecode ('' without a choice) and ranks (referent_manager::ranks_under();
+     *         null for the whole record or without a choice).
+     */
+    public static function narrowing(int $readerid, string $chosen): \stdClass {
+        $choices = [];
+        foreach (referent_manager::for_user($readerid) as $referent) {
+            $key = $referent->fichecode . ($referent->ficherang === '' ? '' : '|' . $referent->ficherang);
+            $choices[$key] = $referent;
+        }
+        $chosen = isset($choices[$chosen]) ? $chosen : '';
+        $fichecode = '';
+        $ranks = null;
+        if ($chosen !== '') {
+            $fichecode = $choices[$chosen]->fichecode;
+            $ranks = referent_manager::ranks_under($fichecode, $choices[$chosen]->ficherang);
+        }
+
+        return (object) ['choices' => $choices, 'chosen' => $chosen, 'fichecode' => $fichecode, 'ranks' => $ranks];
+    }
+
+    /**
      * The declarations of some candidates, and how many of them await an attestation.
      *
      * "Awaiting" means no attestation currently standing: never signed, or every signature withdrawn, as

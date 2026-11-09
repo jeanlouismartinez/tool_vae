@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<role><shortname>vae_direction</shortname><name>Direction VAE</name><description>Lit tous les dossiers.</description><archetype></archetype><contextlevels><level>system</level></contextlevels><allowassign/><allowoverride/><allowswitch/><allowview/><permissions><allow>tool/vae:viewany</allow><allow>tool/vae:export</allow><allow>tool/vae:draftview</allow><allow>tool/vae:readdeposit</allow><allow>tool/vae:annotate</allow></permissions></role>

@@ -30,6 +30,7 @@ use tool_vae\local\identity_map;
 use tool_vae\local\purge;
 use tool_vae\local\schema_validator;
 use tool_vae\local\scope_manager;
+use tool_vae\local\situation_archive;
 
 /**
  * Tests for the reimport of a dossier - lot 8, second half, and criterion 6 as redefined with the
@@ -1459,5 +1460,31 @@ final class dossier_importer_test extends \advanced_testcase {
         $this->assert_refused((int) $this->candidate->id, $forged, 'errorarchivefaisabilite');
 
         $this->assertSame(0, self::rows_for((int) $this->candidate->id));
+    }
+
+    /**
+     * Lot 1b: an archive without situations.json brings no situation back and says so with zeros; the page asks for the
+     * sentence that counts what the file brought back and what it left.
+     */
+    public function test_an_archive_without_situations_brings_none_back_and_the_page_counts_them(): void {
+        global $CFG, $DB;
+
+        $this->seed();
+        $files = $this->build();
+        $this->assertArrayNotHasKey(situation_archive::PATH, $files);
+        $this->destroy();
+        $this->setAdminUser();
+
+        $result = (new dossier_importer())->import_files((int) $this->candidate->id, $files);
+
+        $this->assertSame(0, $result->situations);
+        $this->assertSame(0, $result->situationslaissees);
+        $this->assertSame(0, $DB->count_records('tool_vae_situation'));
+
+        $text = get_string('importdossiersituations', 'tool_vae', (object) ['situations' => 3, 'situationslaissees' => 1]);
+        $this->assertStringContainsString('3', $text);
+        $this->assertStringContainsString('1', $text);
+        $page = file_get_contents($CFG->dirroot . '/admin/tool/vae/import_dossier.php');
+        $this->assertStringContainsString("get_string('importdossiersituations', 'tool_vae', \$result)", $page);
     }
 }

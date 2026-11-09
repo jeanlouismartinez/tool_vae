@@ -105,13 +105,43 @@ $plugin->component = 'tool_vae';
 // 01 is the first version meant for the Moodle plugins directory, 5.3 is the one branch it supports.
 // The 0.47.1 code is unchanged; the number rises by one rank so that installed sites register the new
 // label. No schema change, no new string, no new capability.
-// Build 2026102803, same release label: the Moodle Marketplace refuses a new upload of a plugin under a build
-// number it already holds (2026102802). The package now also carries scripts/ and the Makefile, which the
-// tests read, and an English README. No code change, no schema change, no new string.
-// Build 2026110300, same release label: the default competence scale of imported records can now be chosen in the
-// settings (tool_vae/importscaleid), and the error names the scales looked for, so that a site whose core default
-// scale has been renamed can import records. No schema change, no new capability, no new message provider.
-$plugin->version   = 2026110300;
+// 2026110301: the page "My pathway" (organisation.php, candidate only) reads the learning plans and the
+// course competencies of the core to show them to the candidate. A new page, new strings, a longer
+// privacy:metadata text. No schema change, no new capability, no new message provider: the number
+// rises so that installed sites purge their caches and know the strings.
+// 2026110400: the tab "Followed candidates" of the same page (organisation.php, for a manager who follows
+// at least one candidate): the records they declared on, the counts of "My candidates", and their learning
+// plans of the core where the manager's rights read them. New strings, and the privacy:metadata text on the
+// competency subsystem says that plan names and statuses are shown to that manager. No schema change, no new
+// capability, no new message provider: the number rises so that installed sites purge their caches and know the strings.
+// 2026110401: the tab "Organisation" of the same page (organisation.php?tab=site, for who may view any dossier): the
+// records of the site with what the core holds around them and a count of learning plans, the roles that hold each
+// right of the plugin, the cohorts followed through them and the settings that open parts of the scheme. A page of the
+// administration, a link on the profile, new strings, and the label of the right to view any dossier says what it now
+// opens. No schema change, no new capability, no new message provider: the number rises so that installed sites purge
+// their caches and know the strings.
+// 2026110402: the cycle inside the structure (T-90, lot 3): the evaluation of a competency by the manager who follows the
+// candidate, and the certification of a bloc by the direction - positionings of the structure, never validations, which only
+// the jury gives, outside this plugin. Two new tables, two new capabilities (evaluate, certify), new pages and strings, and a
+// new file in the archive of the dossier. The number rises so that installed sites create the tables and register the rights.
+// 2026110403: the renewal of a certification (T-90, lot 4): an optional last day on a certification ("valid until"), a list for
+// the direction of the certifications whose day is past, and, on the dossier, what an earlier record said of a competency or a
+// bloc. One new column of tool_vae_certif, new strings, a new page of the administration. No new capability.
+// 2026110404: the message to the candidate when a line of positioning is written about them (T-84): a new message provider
+// and two observers (evaluation_recorded, certification_recorded). Only that a line was added, neither its status nor its
+// reason nor its author. The number rises so that installed sites register the provider and the observers. The same number
+// carries the page "VAE roles" (roles_install.php, a page of the administration): it creates the roles of the scheme from the
+// presets shipped with the plugin, never changes a role that exists. No schema change, no new capability.
+// 2.5.03 (build 2026110405): the release label of moodle-tool_vae (the private repository, the platform lavae.org) leaves
+// 01.5.3, which is the label of the public plugin tool_vae (the Moodle plugins directory, the platform fildargent.net), so
+// that the two are told apart on the plugins page: "2" says this is the second version of the VAE plugin, its content
+// being far more advanced than the first one's. Decision of the project owner, 6 November 2026, following the rule
+// proposed in the CHANGELOG (the next version for the same Moodle branch raises the generation). No change of code, no
+// schema change, no new string, no new capability: the number rises by one rank so that installed sites register the label.
+// 2026110406: the authorization to produce the archive of the structure - one new table (tool_vae_booklet_auth) and one new
+// capability (tool/vae:issuestructure), registered by the upgrade; the positionings leave the archives of the vaeiste.
+// 2026110407: self-positioning of the vaeiste (lot 1a).
+$plugin->version   = 2026110409; // 9 November 2026: publication; two screen texts and the documentation corrected.
 
 // 2026100500.00 is Moodle 5.3.0, released on 5 October 2026.
 $plugin->requires  = 2026100500.00;
@@ -133,8 +163,9 @@ $plugin->requires  = 2026100500.00;
 // tested, raise this number to the first branch after it.
 //
 // TWO PACKAGES, OPENED ON 12 OCTOBER 2026 AFTER LOT 8, WITH THE PROJECT OWNER'S AGREEMENT.
-// This is the MOODLE_503 package. The MOODLE_405 package, supported = [405, 405], is maintained
-// until Moodle 4.5 LTS stops receiving security fixes on 4 October 2027, and not one day longer.
+// This is the MOODLE_503 package. The MOODLE_405 package, supported = [405, 405], is no longer
+// maintained (decision of the project owner, 27 October 2026, see docs/BRANCHES.md): no fix is promised, even
+// until 4 October 2027, the day Moodle 4.5 LTS itself stops receiving security fixes.
 // Neither widens its range to swallow the other: announcing a compatibility nobody tests is worse
 // than announcing none, and the continuous integration only ever builds the branch it is on - plus,
 // here, the passage from the one to the other.
@@ -157,4 +188,4 @@ $plugin->incompatible = 504;
 // plugin has never been used by anyone, several lots are missing, and the data side of PO-2 (see above) is not
 // settled. Maturity describes the plugin, not the test report.
 $plugin->maturity  = MATURITY_ALPHA;
-$plugin->release   = '01.5.3 (Moodle 5.3)';
+$plugin->release   = '2.5.03 (Moodle 5.3)';

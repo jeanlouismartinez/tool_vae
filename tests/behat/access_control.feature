@@ -53,7 +53,7 @@ Feature: The pages of a dossier refuse whoever may not act on it, even when reac
     Given I log in as "candidat"
     When I am on the "candidat" "tool_vae > Dossier" page
     Then I should see "Night rounds with the care assistant"
-    And the "autre" "Dossier" page should be refused with "Sorry, but you do not currently have permissions to do that (View any candidate's dossier)."
+    And the "autre" "Dossier" page should be refused with "Sorry, but you do not currently have permissions to do that (View any candidate's dossier and the configuration of the scheme (records, roles, cohorts, settings))."
 
   # Following a candidate opens their dossier for reading. The archive leaves the platform for
   # good, so exporting it stays with the candidate and the direction - decided with the

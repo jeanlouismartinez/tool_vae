@@ -226,8 +226,11 @@ final class exporter {
      *
      * The exporter is the person at the keyboard, and this is the one place where that is the recipient: the archive
      * stays in this plugin's area for them to download, and nobody else may (may_download()). It is their own when the
-     * candidate exports themself - journal, preparation of the validation dossier, bytes of the pieces - and the direction's
-     * when someone else does, who gets what they may read and the list of the pieces. Said to store() in so many words.
+     * candidate exports themself - journal, preparation of the validation dossier, work situations, bytes of the pieces - and
+     * the direction's when someone else does, who gets what they may read and the list of the pieces: the saved sections of
+     * the dossier de faisabilite as draft_manager::can_read() says, the work situations as the reading of the preparation says
+     * (draft_manager::can_read_doctype(), D-1b-G: the direction and the managers who follow, never the site administrator -
+     * decision of the project owner, 9 November 2026). Said to store() in so many words.
      *
      * A line the schema refuses does not refuse the archive: it is produced, and the screen that asks reads warnings() after
      * it to tell the person.
@@ -253,7 +256,9 @@ final class exporter {
             $own,
             $own,
             $exporter,
-            draft_manager::can_read($candidateid)
+            draft_manager::can_read($candidateid),
+            null,
+            $own || draft_manager::can_read_doctype($candidateid, draft_manager::DOCTYPE_VALIDATION)
         );
     }
 
@@ -319,6 +324,16 @@ final class exporter {
      *        export, the holder of the files for a backup. When null, the current user.
      * @param bool|null $withsections Whether the saved sections of the dossier de faisabilite go in: true for a backup, and
      *        for whoever may read them (draft_manager::can_read()). When null, as the current user may.
+     * @param bool|null $withpositioning Whether the positionings of the structure go in (positionnement.json and its line of
+     *        the manifest). True for the backup, the safety net of an uninstall, and for the archive of the structure; false,
+     *        and when null, for every archive of the vaeiste: the positionings are the structure's word, never a part of the
+     *        vaeiste's dossiers (decision of the project owner, 7 November 2026).
+     * @param bool|null $withsituations Whether the work situations of the vaeiste go in (situations.json, its pieces and its line
+     *        of the manifest, lot 1b). True for the author's own archive and for the backup, the safety net of an uninstall,
+     *        whoever holds it; for the archive a third party takes, only when that person may read the preparation of the
+     *        validation dossier (draft_manager::can_read_doctype(), D-1b-G) - the direction and the managers who follow, never
+     *        the site administrator (decision of the project owner, 9 November 2026). When null, as the current user may:
+     *        the author, or a reader of the preparation.
      * @return \stored_file
      */
     public function store(
@@ -332,7 +347,9 @@ final class exporter {
         ?bool $fullpieces = null,
         ?bool $forauthor = null,
         ?int $producerid = null,
-        ?bool $withsections = null
+        ?bool $withsections = null,
+        ?bool $withpositioning = null,
+        ?bool $withsituations = null
     ): \stored_file {
         global $DB, $USER;
 
@@ -348,9 +365,21 @@ final class exporter {
         $forauthor = $forauthor ?? $own;
         $producerid = $producerid ?? (int) $USER->id;
         $withsections = $withsections ?? draft_manager::can_read($candidateid);
+        $withsituations = $withsituations ?? self::may_carry_situations($candidateid, $forauthor);
         // A refusal on a lost file, and on a dossier too large, only where the person is promised an archive that reads back;
         // the acts that must not stop for them do not refuse. A line the schema refuses refuses nowhere: see warnings().
-        $files = $this->build($candidateid, $claims, $archiveid, $now, $full, $enforcelimits, $forauthor, $withsections);
+        $files = $this->build(
+            $candidateid,
+            $claims,
+            $archiveid,
+            $now,
+            $full,
+            $enforcelimits,
+            $forauthor,
+            $withsections,
+            $withpositioning ?? false,
+            $withsituations
+        );
         if ($enforcelimits) {
             self::require_restorable($files);
         }
@@ -386,6 +415,19 @@ final class exporter {
         );
         if (!$file) {
             throw new \moodle_exception('errorexportfailed', 'tool_vae');
+        }
+
+        // THE ARCHIVE THE VAEISTE EXPORTS IS KEPT, ONE PER VAEISTE (decision of the project owner, 7 November 2026): the new
+        // one replaces the old one, once it is written and registered - a failure above keeps the old one. The register keeps the
+        // line of the replaced archive, so that a panel which holds a copy of it can still have it confirmed. The archive
+        // another person exports (the direction, an administrator) is not the vaeiste's and keeps its short life: it neither
+        // replaces nor is replaced.
+        if ($filearea === self::FILEAREA && $producerid === $candidateid) {
+            foreach (get_file_storage()->get_area_files($contextid, $component, $filearea, 0, 'id', false) as $old) {
+                if ((int) $old->get_userid() === $candidateid && (int) $old->get_id() < (int) $file->get_id()) {
+                    $old->delete();
+                }
+            }
         }
 
         // The producer signs the event, as it signs the register and the file: a backup rewritten in the request of the
@@ -454,6 +496,9 @@ final class exporter {
      * @param bool|null $forauthor Whether the archive is for its author (see store()); null: the current user is the candidate.
      * @param bool|null $withsections Whether the saved sections of the dossier de faisabilite go in (see store()); null: as the
      *        current user may read them.
+     * @param bool $withpositioning Whether the positionings of the structure go in (see store()); false by default.
+     * @param bool|null $withsituations Whether the work situations go in (see store()); null: for the author, and for a reader
+     *        of the preparation of the validation dossier (draft_manager::can_read_doctype()).
      * @return string[]
      */
     public function build(
@@ -464,7 +509,9 @@ final class exporter {
         bool $fullpieces = false,
         bool $strictpieces = true,
         ?bool $forauthor = null,
-        ?bool $withsections = null
+        ?bool $withsections = null,
+        bool $withpositioning = false,
+        ?bool $withsituations = null
     ): array {
         global $CFG, $USER;
 
@@ -473,6 +520,7 @@ final class exporter {
         $candidate = \core_user::get_user($candidateid, '*', MUST_EXIST);
         $forauthor = $forauthor ?? ((int) $USER->id === $candidateid);
         $withsections = $withsections ?? draft_manager::can_read($candidateid);
+        $withsituations = $withsituations ?? self::may_carry_situations($candidateid, $forauthor);
 
         $lang = (string) $candidate->lang;
         $timezone = \core_date::get_user_timezone($candidate);
@@ -489,12 +537,27 @@ final class exporter {
                 $fullpieces,
                 $strictpieces,
                 $forauthor,
-                $withsections
+                $withsections,
+                $withpositioning,
+                $withsituations
             );
         } finally {
             display_date::force_timezone($previoustimezone);
             force_current_language($previous);
         }
+    }
+
+    /**
+     * Whether the archive the current user takes carries the work situations, for the callers that have not said (see
+     * store()): the author always; anyone else as the preparation of the validation dossier is read (D-1b-G), which sets
+     * the site administrator aside.
+     *
+     * @param int $candidateid
+     * @param bool $forauthor Whether the archive is for its author.
+     * @return bool
+     */
+    private static function may_carry_situations(int $candidateid, bool $forauthor): bool {
+        return $forauthor || draft_manager::can_read_doctype($candidateid, draft_manager::DOCTYPE_VALIDATION);
     }
 
     /**
@@ -508,6 +571,8 @@ final class exporter {
      * @param bool $strictpieces See build().
      * @param bool $forauthor See build(); false, here, is the closed default.
      * @param bool $withsections See build(); false, here, is the closed default.
+     * @param bool $withpositioning See build(); false, here, is the closed default.
+     * @param bool $withsituations See build(); false, here, is the closed default.
      * @return string[]
      */
     private function assemble(
@@ -518,7 +583,9 @@ final class exporter {
         bool $fullpieces = false,
         bool $strictpieces = true,
         bool $forauthor = false,
-        bool $withsections = false
+        bool $withsections = false,
+        bool $withpositioning = false,
+        bool $withsituations = false
     ): array {
         global $CFG;
 
@@ -579,6 +646,45 @@ final class exporter {
             $files[scope_manager::PATH] = self::encode($scope);
             $schemas[] = 'hors_activite.schema.json';
         }
+        // The self-positioning of the vaeiste (lot 1a): their own word about where they stand on the nodes of their records,
+        // the history and the line that stands, in every archive of their dossier and in the backup. Never a validation, and
+        // the file says so. The archive of the structure (structure_archive) does not carry it.
+        $selfpos = selfpos_archive::document((int) $candidate->id);
+        if ($selfpos !== null) {
+            $files[selfpos_archive::PATH] = self::encode($selfpos);
+            $schemas[] = 'autopositionnement.schema.json';
+        }
+        // The work situations of the vaeiste (lot 1b, D-1b-A): their text with its versions, their tags, their pieces, the
+        // annotations of the managers they consented to and the lines of that consent. In the archive the vaeiste takes away
+        // and in the backup, the safety net of an uninstall, always; in the archive a third party takes, only when that person
+        // may read the preparation of the validation dossier, whose part the situations are (D-1b-G: the direction and the
+        // managers who follow, never the site administrator - decision of the project owner, 9 November 2026). Not there, the
+        // file, its schema, its pieces, its line of the manifest and of the notice are all absent, and nothing reports them.
+        // The bytes of the files, the addresses and the titles of the pieces only where those of the declarations go (MC-28).
+        // Never a validation, and the file says so. Never in validation.json, the PDF nor the copies (D-1b-D).
+        $situationbytes = $withsituations && $fullpieces ? situation_archive::files((int) $candidate->id, $strictpieces) : [];
+        $situations = $withsituations ? situation_archive::document(
+            (int) $candidate->id,
+            $fullpieces,
+            $fullpieces ? array_keys($situationbytes) : null
+        ) : null;
+        if ($situations !== null) {
+            $files[situation_archive::PATH] = self::encode($situations);
+            $schemas[] = 'situations.schema.json';
+            foreach ($situationbytes as $path => $content) {
+                $files[$path] = $content;
+            }
+        }
+        // The positionings of the structure (T-90, lot 3): the evaluations of the competencies and the certifications of the
+        // blocs, the history and the line that stands. ONLY in the backup, the safety net of an uninstall, and in the archive of
+        // the structure: never in the archive or the copies of the vaeiste (decision of the project owner, 7 November 2026) -
+        // the vaeiste's dossiers and the structure's are two documents, and are never mixed. Never a validation, and the file
+        // says so. The candidate still reads their lines on the screen.
+        $positioning = $withpositioning ? positioning_archive::document((int) $candidate->id) : null;
+        if ($positioning !== null) {
+            $files[positioning_archive::PATH] = self::encode($positioning);
+            $schemas[] = 'positionnement.schema.json';
+        }
         // The supporting pieces (T-13, lot 3): the list always; the bytes and the addresses only for the archive the
         // candidate exports themself and for the backup kept on the platform (MC-28).
         $bytes = $fullpieces ? piece_overview::files((int) $candidate->id, $strictpieces) : [];
@@ -616,6 +722,11 @@ final class exporter {
             ]),
             get_string('exportreadmecontents', 'tool_vae'),
             ...($pieces === null ? [] : [get_string('exportreadmepieces', 'tool_vae')]),
+            ...($positioning === null ? [] : [get_string('exportreadmepositioning', 'tool_vae')]),
+            ...($selfpos === null ? [] : [get_string('exportreadmeselfpos', 'tool_vae')]),
+            ...($situations === null ? [] : [get_string('exportreadmesituations', 'tool_vae')]),
+            // Said where a reader looks for it: the positionings of the structure are not in the dossiers of the vaeiste.
+            ...($withpositioning ? [] : [get_string('exportreadmeabsentstructure', 'tool_vae')]),
             // What the archive does not carry, so that nobody takes it for a complete copy of the database: a reimport, and the
             // backup taken before an uninstall, give back the declarations, the signatures and the sections, and nothing of this.
             get_string('exportreadmeabsent', 'tool_vae'),
@@ -631,7 +742,7 @@ final class exporter {
             'exporte_le' => self::iso($now),
             'produit_par' => [
                 'systeme' => self::SYSTEM,
-                'version' => $CFG->release,
+                'version' => $CFG->release ?? '',
                 'composant' => 'tool_vae',
                 'version_composant' => \core_plugin_manager::instance()->get_plugin_info('tool_vae')->release,
             ],
@@ -649,7 +760,8 @@ final class exporter {
             $rubriques,
             $validation ?? [],
             piece_overview::by_declaration($pieces),
-            $scope ?? []
+            $scope ?? [],
+            $positioning ?? []
         );
 
         $digests = [];
@@ -665,6 +777,9 @@ final class exporter {
             + ($validation === null ? [] : ['schema_validation' => validation_overview::SCHEMA_VERSION])
             + ($reflexion === null ? [] : ['schema_reflexion' => reflexion_overview::SCHEMA_VERSION])
             + ($scope === null ? [] : ['schema_hors_activite' => scope_manager::SCHEMA_VERSION])
+            + ($positioning === null ? [] : ['schema_positionnement' => positioning_archive::SCHEMA_VERSION])
+            + ($selfpos === null ? [] : ['schema_autopositionnement' => selfpos_archive::SCHEMA_VERSION])
+            + ($situations === null ? [] : ['schema_situations' => situation_archive::SCHEMA_VERSION])
             + ($pieces === null ? [] : ['schema_pieces' => piece_overview::SCHEMA_VERSION]) + $head + [
             'preuves' => $entries,
             'fichiers' => $digests,
@@ -741,8 +856,9 @@ final class exporter {
     /**
      * Whether the current user may download an archive.
      *
-     * Its author only, within its lifetime, and only while they may still export that dossier:
-     * a right withdrawn after the archive was produced is withdrawn from the download too.
+     * Its author only, and only while they may still export that dossier: a right withdrawn after the archive was
+     * produced is withdrawn from the download too. Within its lifetime, a day, unless the author is the vaeiste themself:
+     * their own archive is kept (one per vaeiste, the new one replacing the old one).
      *
      * @param \stored_file $file
      * @param int $now
@@ -758,18 +874,25 @@ final class exporter {
         ) {
             return false;
         }
-        if ((int) $file->get_userid() !== (int) $USER->id || self::expired((int) $file->get_timecreated(), $now)) {
+        if ((int) $file->get_userid() !== (int) $USER->id) {
             return false;
         }
 
         $context = \context::instance_by_id($file->get_contextid(), IGNORE_MISSING);
+        if (!$context || (int) $context->contextlevel !== CONTEXT_USER) {
+            return false;
+        }
+        // The vaeiste's own archive is kept as long as their account exists; every other one lives a day.
+        $kept = (int) $file->get_userid() === (int) $context->instanceid;
+        if (!$kept && self::expired((int) $file->get_timecreated(), $now)) {
+            return false;
+        }
 
-        return $context && (int) $context->contextlevel === CONTEXT_USER
-            && access::can_export((int) $context->instanceid);
+        return access::can_export((int) $context->instanceid);
     }
 
     /**
-     * Delete every archive past its lifetime.
+     * Delete every archive past its lifetime: the ones another person exported, a day old. The archive of the vaeiste is kept.
      *
      * @param int $now
      * @return int How many archives were deleted.
@@ -777,10 +900,16 @@ final class exporter {
     public static function purge_expired(int $now): int {
         global $DB;
 
-        $records = $DB->get_records_select(
-            'files',
-            'component = :component AND filearea = :filearea AND filename <> :dot AND timecreated <= :limit',
+        // Never the archive of the vaeiste, kept as long as their account exists: the file was made by the account of the
+        // user context it sits in. Only what another person exported is past its lifetime.
+        $records = $DB->get_records_sql(
+            "SELECT f.*
+               FROM {files} f
+               JOIN {context} ctx ON ctx.id = f.contextid AND ctx.contextlevel = :userlevel
+              WHERE f.component = :component AND f.filearea = :filearea AND f.filename <> :dot
+                AND f.timecreated <= :limit AND f.userid <> ctx.instanceid",
             [
+                'userlevel' => CONTEXT_USER,
                 'component' => 'tool_vae',
                 'filearea' => self::FILEAREA,
                 'dot' => '.',
@@ -810,6 +939,27 @@ final class exporter {
         if ($context) {
             get_file_storage()->delete_area_files($context->id, 'tool_vae', self::FILEAREA);
         }
+    }
+
+    /**
+     * The archive the vaeiste exported themself, in place: kept as long as their account exists, one per vaeiste.
+     *
+     * @param int $candidateid
+     * @return \stored_file|null
+     */
+    public static function kept(int $candidateid): ?\stored_file {
+        $context = \context_user::instance($candidateid, IGNORE_MISSING);
+        if (!$context) {
+            return null;
+        }
+        $files = get_file_storage()->get_area_files($context->id, 'tool_vae', self::FILEAREA, 0, 'id DESC', false);
+        foreach ($files as $file) {
+            if ((int) $file->get_userid() === $candidateid) {
+                return $file;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -1083,6 +1233,9 @@ final class exporter {
             self::VALIDATION_PATH => 'validation.schema.json',
             self::REFLEXION_PATH => 'reflexion.schema.json',
             scope_manager::PATH => 'hors_activite.schema.json',
+            positioning_archive::PATH => 'positionnement.schema.json',
+            selfpos_archive::PATH => 'autopositionnement.schema.json',
+            situation_archive::PATH => 'situations.schema.json',
             piece_overview::PATH => 'pieces.schema.json',
         ];
 
@@ -1159,7 +1312,7 @@ final class exporter {
      * @param string $name Path below docs/schema.
      * @return string
      */
-    private static function read_schema(string $name): string {
+    public static function read_schema(string $name): string {
         global $CFG;
 
         $path = $CFG->dirroot . '/admin/tool/vae/docs/schema/' . $name;
@@ -1190,7 +1343,7 @@ final class exporter {
      * @param array $data
      * @return string
      */
-    private static function encode(array $data): string {
+    public static function encode(array $data): string {
         return json_encode(
             $data,
             JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR

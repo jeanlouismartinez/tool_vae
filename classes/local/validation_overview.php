@@ -51,12 +51,19 @@ final class validation_overview {
     public static function saved_versions(int $candidateid): array {
         global $DB;
 
+        // The work situations are drafts of the same type, and NOT sections of the preparation (D-1b-D): they have their own
+        // file in the archive (situations.json) and never enter this document, the PDF, the copies nor a deposit.
         $rows = $DB->get_records_sql(
             'SELECT d.id, d.fichecode, d.section, v.number, v.content, v.timecreated AS created
                FROM {tool_vae_draft} d
                JOIN {tool_vae_version} v ON v.draftid = d.id AND v.number = d.currentversion
-              WHERE d.candidateid = :candidateid AND d.doctype = :doctype AND d.currentversion > 0',
-            ['candidateid' => $candidateid, 'doctype' => draft_manager::DOCTYPE_VALIDATION]
+              WHERE d.candidateid = :candidateid AND d.doctype = :doctype AND d.currentversion > 0
+                    AND d.section <> :situation',
+            [
+                'candidateid' => $candidateid,
+                'doctype' => draft_manager::DOCTYPE_VALIDATION,
+                'situation' => validation_catalog::SITUATION_SECTION,
+            ]
         );
 
         $rows = array_values($rows);

@@ -37,8 +37,9 @@ use tool_vae\local\request_manager;
  * dossier - while the "Reply" button of the email leads to nobody.
  *
  * WHAT IS ASSERTED, TWICE OVER.
- *   - On the strings, in English and in French: the body of each of the thirteen texts (twelve providers, the preparation of
- *     the validation dossier having words of its own) ends with the sentence below, adjacent to the link the notifier adds.
+ *   - On the strings, in English and in French: the body of each of the seventeen texts (fourteen providers, the preparation
+ *     of the validation dossier having words of its own, and the two that tell of an erasure) ends with the sentence below,
+ *     adjacent to the link the notifier adds.
  *   - Through the notifier, for each text: the message that would leave the site, as notifier::deliver() composes it, ends with
  *     that sentence and then the link, in the plain text and in the HTML, and is sent by the site's no-reply user.
  *
@@ -96,6 +97,10 @@ final class message_pointer_test extends \advanced_testcase {
             'en' => 'To read the preparation, open the dossier with the link below.',
             'fr' => 'Pour lire la préparation, ouvrez le dossier avec le lien ci-dessous.',
         ],
+        'positioningrecorded' => [
+            'en' => 'To read the line, open the dossier with the link below.',
+            'fr' => 'Pour lire la ligne, ouvrez le dossier avec le lien ci-dessous.',
+        ],
         'opinionmade' => [
             'en' => 'To read the opinion, open the dossier with the link below.',
             'fr' => 'Pour lire l\'avis, ouvrez le dossier avec le lien ci-dessous.',
@@ -141,6 +146,14 @@ final class message_pointer_test extends \advanced_testcase {
         'declarationsawaitagain' => [
             'en' => 'To attest the declarations or ask a question, open the dossier with the link below.',
             'fr' => 'Pour attester les déclarations ou poser une question, ouvrez le dossier avec le lien ci-dessous.',
+        ],
+        'noteadded' => [
+            'en' => 'To read the annotation, open the dossier with the link below.',
+            'fr' => 'Pour lire l\'annotation, ouvrez le dossier avec le lien ci-dessous.',
+        ],
+        'consentgiven' => [
+            'en' => 'To read the dossier, open it with the link below.',
+            'fr' => 'Pour lire le dossier, ouvrez-le avec le lien ci-dessous.',
         ],
     ];
 
@@ -378,7 +391,7 @@ final class message_pointer_test extends \advanced_testcase {
         return [$attestation, $colleague];
     }
 
-    // The fifteen scenarios. Each leaves the site in the state that makes the message true, and returns the message the
+    // The seventeen scenarios. Each leaves the site in the state that makes the message true, and returns the message the
     // notifier handed to the messaging subsystem for it.
 
     /**
@@ -474,6 +487,29 @@ final class message_pointer_test extends \advanced_testcase {
         (new opinion_manager())->write((int) $deposit->id, 'Un avis de lecture.');
 
         return $this->deliver_one(notifier::OPINION_MADE);
+    }
+
+    /**
+     * A line of positioning of the structure was written about the candidate.
+     *
+     * @return \stdClass
+     */
+    private function scenario_positioningrecorded(): \stdClass {
+        $plugin = $this->getDataGenerator()->get_plugin_generator('tool_vae');
+        $plugin->create_source(['fichecode' => 'RNCP100', 'ficherang' => 'BC01', 'shortname' => 'Bloc 1']);
+        $plugin->create_competency([
+            'fichecode' => 'RNCP100', 'ficherang' => 'C01', 'shortname' => 'Competence 1', 'bloc' => 'BC01',
+        ]);
+        $plugin->create_declaration([
+            'userid' => $this->candidate->id, 'fichecode' => 'RNCP100', 'ficherang' => 'C01',
+            'situation' => 'Une situation vecue en etablissement.',
+        ]);
+        assign_capability('tool/vae:evaluate', CAP_ALLOW, $this->managerrole, \context_system::instance()->id, true);
+        accesslib_clear_all_caches_for_unit_testing();
+        $this->setUser($this->manager);
+        (new \tool_vae\local\evaluation_manager())->write((int) $this->candidate->id, 'RNCP100', 'C01', 'inproof', 'Constate.');
+
+        return $this->deliver_one(notifier::POSITIONING_RECORDED);
     }
 
     /**
@@ -645,6 +681,59 @@ final class message_pointer_test extends \advanced_testcase {
     }
 
     /**
+     * What the messages of lot 1b stand on: the preparation open, the candidate writing it, the manager holding annotate,
+     * the consent of the candidate to the manager (which queues its own message), and one work situation.
+     *
+     * @return \stdClass The situation.
+     */
+    private function annotation_ground(): \stdClass {
+        \tool_vae\local\validation_catalog::reset();
+        set_config('validationopen', 1, 'tool_vae');
+        $plugin = $this->getDataGenerator()->get_plugin_generator('tool_vae');
+        $plugin->create_source(['fichecode' => 'RNCP100', 'ficherang' => 'BC01', 'shortname' => 'Bloc 1']);
+        $plugin->create_competency([
+            'fichecode' => 'RNCP100', 'ficherang' => 'C01', 'shortname' => 'Competence 1', 'bloc' => 'BC01',
+        ]);
+        $system = \context_system::instance()->id;
+        assign_capability('tool/vae:draftown', CAP_ALLOW, $this->candidaterole, $system, true);
+        assign_capability('tool/vae:annotate', CAP_ALLOW, $this->managerrole, $system, true);
+        accesslib_clear_all_caches_for_unit_testing();
+
+        $plugin->create_consent(['userid' => $this->candidate->id, 'managerid' => $this->manager->id]);
+
+        return $plugin->create_situation([
+            'userid' => $this->candidate->id, 'fichecode' => 'RNCP100', 'title' => 'Toilette au lever', 'tags' => 'C01',
+            'text' => 'Toilette au lever, en chambre.',
+        ]);
+    }
+
+    /**
+     * A manager the candidate consented to writes an annotation on one of their work situations.
+     *
+     * @return \stdClass
+     */
+    private function scenario_noteadded(): \stdClass {
+        $situation = $this->annotation_ground();
+        $this->getDataGenerator()->get_plugin_generator('tool_vae')->create_note([
+            'authorid' => $this->manager->id, 'userid' => $this->candidate->id, 'fichecode' => 'RNCP100',
+            'slot' => (int) $situation->slot, 'text' => 'Une annotation.',
+        ]);
+
+        return $this->deliver_one(notifier::NOTE_ADDED);
+    }
+
+    /**
+     * The candidate consents to a manager who follows them, and holds annotate, annotating their booklet.
+     *
+     * @return \stdClass
+     */
+    private function scenario_consentgiven(): \stdClass {
+        $this->annotation_ground();
+
+        return $this->deliver_one(notifier::CONSENT_GIVEN);
+    }
+
+    /**
      * The message of a text, as the notifier hands it to the messaging subsystem.
      *
      * @param string $text A key of CLAUSES.
@@ -701,7 +790,7 @@ final class message_pointer_test extends \advanced_testcase {
     }
 
     /**
-     * The fifteen texts: the twelve providers, the preparation of the validation dossier that has words of its own, and the two
+     * The seventeen texts: the fourteen providers, the preparation of the validation dossier that has words of its own, and the two
      * that tell of an erasure (they are sent under types that exist).
      *
      * @return array[]
@@ -716,7 +805,7 @@ final class message_pointer_test extends \advanced_testcase {
     }
 
     /**
-     * The thirteen texts in each of the two languages.
+     * The seventeen texts in each of the two languages.
      *
      * @return array[]
      */

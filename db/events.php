@@ -91,6 +91,16 @@ $observers = [
         'internal' => false,
     ],
     [
+        'eventname' => '\tool_vae\event\evaluation_recorded',
+        'callback' => '\tool_vae\notifier::evaluation_recorded',
+        'internal' => false,
+    ],
+    [
+        'eventname' => '\tool_vae\event\certification_recorded',
+        'callback' => '\tool_vae\notifier::certification_recorded',
+        'internal' => false,
+    ],
+    [
         'eventname' => '\tool_vae\event\opinion_created',
         'callback' => '\tool_vae\notifier::opinion_created',
         'internal' => false,
@@ -123,6 +133,17 @@ $observers = [
     [
         'eventname' => '\tool_vae\event\competency_left_record',
         'callback' => '\tool_vae\notifier::competency_left_record',
+        'internal' => false,
+    ],
+    // Lot 1b: an annotation is told to the vaeiste, a consent to the person it names; a withdrawal tells nobody.
+    [
+        'eventname' => '\tool_vae\event\note_recorded',
+        'callback' => '\tool_vae\notifier::note_recorded',
+        'internal' => false,
+    ],
+    [
+        'eventname' => '\tool_vae\event\consent_changed',
+        'callback' => '\tool_vae\notifier::consent_changed',
         'internal' => false,
     ],
 ];

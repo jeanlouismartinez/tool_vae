@@ -31,6 +31,7 @@ use tool_vae\local\access;
 use tool_vae\local\competency_gateway;
 use tool_vae\local\exporter;
 use tool_vae\local\piece_manager;
+use tool_vae\local\spiece_manager;
 
 /**
  * Serve an exported archive (lot 8, MC-9), or a supporting piece (T-13).
@@ -38,7 +39,8 @@ use tool_vae\local\piece_manager;
  * The same shape as the core's own GDPR export in tool_dataprivacy: a user context, a login, a
  * check, an expiry. Here the check is exporter::may_download() - the archive's author only,
  * within its day, and only while they may still export that dossier. A supporting piece is served by
- * piece_manager::open(): whoever may open it, from the row of the piece, as a download.
+ * piece_manager::open(): whoever may open it, from the row of the piece, as a download; a piece of the work
+ * situations (lot 1b) by spiece_manager::open(), the same way.
  *
  * @param stdClass $course
  * @param stdClass|null $cm
@@ -61,6 +63,34 @@ function tool_vae_pluginfile($course, $cm, $context, $filearea, $args, $forcedow
 
         // Never the preview of the core: it turns the forced download off and makes the server decode the image.
         unset($options['preview']);
+        send_stored_file($file, 0, 0, true, $options);
+    }
+
+    // A supporting piece of the work situations (lot 1b): the same way, decided by spiece_manager::open().
+    if ((int) $context->contextlevel === CONTEXT_USER && $filearea === spiece_manager::FILEAREA) {
+        require_login(null, false);
+
+        $file = spiece_manager::open((int) array_shift($args), (int) $context->id);
+        if (!$file) {
+            send_file_not_found();
+        }
+
+        unset($options['preview']);
+        send_stored_file($file, 0, 0, true, $options);
+    }
+
+    // The archive of the accompanying structure: kept, one per vaeiste; the vaeiste and whoever may produce it take it away.
+    if ((int) $context->contextlevel === CONTEXT_USER && $filearea === \tool_vae\local\structure_archive::FILEAREA) {
+        require_login(null, false);
+
+        $itemid = (int) array_shift($args);
+        $filename = array_pop($args);
+        $filepath = $args ? '/' . implode('/', $args) . '/' : '/';
+        $file = get_file_storage()->get_file($context->id, 'tool_vae', $filearea, $itemid, $filepath, $filename);
+        if (!$file || !\tool_vae\local\structure_archive::may_download($file)) {
+            send_file_not_found();
+        }
+
         send_stored_file($file, 0, 0, true, $options);
     }
 
@@ -97,11 +127,24 @@ function tool_vae_pluginfile($course, $cm, $context, $filearea, $args, $forcedow
  * @return bool True when a node was added.
  */
 function tool_vae_myprofile_navigation(tree $tree, $user, $iscurrentuser, $course) {
-    if (!competency_gateway::is_subsystem_enabled()) {
-        return false;
+    $added = false;
+
+    // The configuration of the scheme, for who may view any dossier (T-90 lot 4); the page asks the same right. It reads the
+    // site, not the competency subsystem, so it is offered whether or not that subsystem is on.
+    if ($iscurrentuser && has_capability('tool/vae:viewany', context_system::instance())) {
+        $tree->add_node(new \core_user\output\myprofile\node(
+            'miscellaneous',
+            'toolvaeorganisationsite',
+            get_string('orgtabsite', 'tool_vae'),
+            null,
+            new moodle_url('/admin/tool/vae/organisation.php', ['tab' => 'site'])
+        ));
+        $added = true;
     }
 
-    $added = false;
+    if (!competency_gateway::is_subsystem_enabled()) {
+        return $added;
+    }
 
     if (access::can_view((int) $user->id)) {
         // The node name must be unique across the whole tree, not just within this plugin.
@@ -111,6 +154,19 @@ function tool_vae_myprofile_navigation(tree $tree, $user, $iscurrentuser, $cours
             get_string('mydossier', 'tool_vae'),
             null,
             new moodle_url('/admin/tool/vae/dossier.php', ['userid' => $user->id])
+        ));
+        $added = true;
+    }
+
+    // The pathway is read by its person alone (T-90), on their own profile: offered on the same conditions as the page asks,
+    // so not in a session of "log in as", which the page refuses.
+    if ($iscurrentuser && !\core\session\manager::is_loggedinas() && access::can_view((int) $user->id)) {
+        $tree->add_node(new \core_user\output\myprofile\node(
+            'miscellaneous',
+            'toolvaeorganisation',
+            get_string('orgtabmine', 'tool_vae'),
+            null,
+            new moodle_url('/admin/tool/vae/organisation.php')
         ));
         $added = true;
     }

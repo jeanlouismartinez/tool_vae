@@ -1,0 +1,451 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jeanlouismartinez/moodle-tool_vae/schema/situations.schema.json",
+  "$comment": "Version 0.1.0, 8 novembre 2026 (lot 1b). Ecrit avec le plugin et restaure a l'import : une situation est restauree entiere ou laissee ; les annotations et les accords sont des lignes ajoutees et jamais modifiees, restaurees une a une. Le fichier est facultatif dans l'archive (version_format reste 1). Ce sont LES SITUATIONS DE TRAVAIL DU VAEISTE, sa parole sur son travail, et, a part, les annotations de responsables ecrites avec son accord : JAMAIS une validation ni une note. Seul le jury valide, hors de la plateforme. Rien n'en est jamais calcule. Une annotation ou un accord restaure ne designe aucun compte du site et n'ouvre aucune annotation.",
+  "title": "Situations de travail du vaeiste",
+  "description": "Les situations de travail que le vaeiste decrit pour son livret 2 : pour chacune son titre, sa periode, son cadre, ses etiquettes (les elements du referentiel dont il dit qu'elle temoigne), toutes les versions de son texte avec ce que chacune portait, son brouillon en cours et ses pieces ; la liste de ces pieces (ce qu'elles sont, jamais ce qu'elles contiennent, sauf dans l'archive du vaeiste et la sauvegarde) ; les annotations des responsables auxquels il a donne son accord, retraits compris ; les lignes de cet accord. Pas une validation : seul le jury valide, hors de la plateforme.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "avertissement",
+    "officiel",
+    "situations",
+    "pieces",
+    "annotations",
+    "accords"
+  ],
+  "properties": {
+    "avertissement": {
+      "description": "La phrase qui dit ce que ce fichier est : la parole du vaeiste et celle de responsables, non une validation.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "officiel": {
+      "description": "Toujours faux : rien de ce fichier n'a valeur de decision d'un jury ni de diplome.",
+      "const": false
+    },
+    "situations": {
+      "description": "Une entree par situation, dans l'ordre des fiches et des emplacements. Trente situations au plus par fiche, jamais une borne sur le fichier : l'emplacement va de 1 a 30 et une adresse (fiche, emplacement) ne figure qu'une fois (tenu par l'importeur).",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/situation"
+      }
+    },
+    "pieces": {
+      "description": "Une entree par piece des situations, retirees comprises, dans l'ordre ou elles ont ete jointes.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/piece"
+      }
+    },
+    "annotations": {
+      "description": "Toutes les lignes d'annotation, retraits compris, de la plus ancienne a la plus recente. Deux cents annotations par cible (lignes active, retirees comprises ; les lignes de retrait ne comptent pas), sinon la cible est laissee, et vingt mille lignes pour le fichier (le fichier est refuse) : tenu par l'importeur, le validateur du plugin ne connaissant pas maxItems.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/annotation"
+      }
+    },
+    "accords": {
+      "description": "Toutes les lignes d'accord du vaeiste, de la plus ancienne a la plus recente ; la derniere ligne d'un responsable dit si l'accord tenait. Huit cents lignes au plus dans le fichier (sinon il est refuse) ; chaque retrait suit un accord donne au meme responsable et non encore retire (sinon le fichier est refuse) ; une fois restaurees, quatre cents accords donnes et huit cents lignes au plus pour le vaeiste (sinon toutes les lignes du fichier sont laissees) : tenu par l'importeur, le validateur du plugin ne connaissant pas maxItems.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/accord"
+      }
+    }
+  },
+  "$defs": {
+    "fiche": {
+      "description": "Code de la fiche de certification, comme sur une declaration.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 32
+    },
+    "intitule": {
+      "description": "Le titre que le vaeiste donne, soixante caracteres au plus ; vide pour une situation qui n'en a pas encore. Texte libre, couvert par le rappel d'anonymisation.",
+      "type": "string",
+      "maxLength": 60
+    },
+    "cadre": {
+      "description": "Le cadre (lieu, service, structure), cent caracteres au plus ; vide autorise. Texte libre, couvert par le rappel d'anonymisation.",
+      "type": "string",
+      "maxLength": 100
+    },
+    "etiquettes": {
+      "description": "Les rangs des elements du referentiel, de niveau deux ou plus, dont le vaeiste dit que la situation temoigne ; aucune autorise. Ce que le vaeiste revendique, jamais une validation.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z0-9]{1,8}$"
+      }
+    },
+    "date": {
+      "description": "Date et heure, ISO 8601, UTC.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "jour_periode": {
+      "description": "Un jour d'une periode de travail, ISO 8601, UTC : minuit local du jour choisi, du 1er janvier 1800 au 1er janvier 2200 (le selecteur de date du site va de 1900 a 2050 en heure locale). L'importeur tient la meme borne, tranchee a la seconde (le schema au jour pres).",
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^((1[89]|2[01])[0-9]{2}-[0-9]{2}-[0-9]{2}T|2200-01-01T)"
+    },
+    "details": {
+      "description": "Le titre, la periode, le cadre et les etiquettes tels qu'ils se lisaient a l'ecriture d'une version.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "intitule",
+        "cadre",
+        "etiquettes"
+      ],
+      "properties": {
+        "intitule": {
+          "$ref": "#/$defs/intitule"
+        },
+        "periode_debut": {
+          "$ref": "#/$defs/jour_periode"
+        },
+        "periode_fin": {
+          "$ref": "#/$defs/jour_periode"
+        },
+        "cadre": {
+          "$ref": "#/$defs/cadre"
+        },
+        "etiquettes": {
+          "$ref": "#/$defs/etiquettes"
+        }
+      }
+    },
+    "situation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identifiant",
+        "fiche",
+        "emplacement",
+        "intitule",
+        "cadre",
+        "etiquettes",
+        "versions",
+        "pieces"
+      ],
+      "properties": {
+        "identifiant": {
+          "description": "Identifiant opaque de la situation ; une annotation la nomme par lui.",
+          "$ref": "commun/identifiant.schema.json"
+        },
+        "fiche": {
+          "$ref": "#/$defs/fiche"
+        },
+        "emplacement": {
+          "description": "Le numero de la situation pour ce vaeiste et cette fiche, de 1 a 30.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 30
+        },
+        "intitule": {
+          "$ref": "#/$defs/intitule"
+        },
+        "periode_debut": {
+          "description": "Le premier jour de la periode, si le vaeiste en donne une.",
+          "$ref": "#/$defs/jour_periode"
+        },
+        "periode_fin": {
+          "description": "Le dernier jour de la periode, si le vaeiste en donne une ; jamais avant le premier (verifie a l'import).",
+          "$ref": "#/$defs/jour_periode"
+        },
+        "cadre": {
+          "$ref": "#/$defs/cadre"
+        },
+        "etiquettes": {
+          "$ref": "#/$defs/etiquettes"
+        },
+        "versions": {
+          "description": "Toutes les versions du texte, numerotees de 1 a n dans l'ordre. Deux cents au plus : au-dela, l'importeur laisse la situation.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/version"
+          }
+        },
+        "brouillon": {
+          "description": "Le texte en cours, qui n'est pas une version, s'il existe.",
+          "type": "string",
+          "maxLength": 100000
+        },
+        "pieces": {
+          "description": "Les pieces que la situation cite, chacune avec la partie concernee.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/lien"
+          }
+        }
+      }
+    },
+    "version": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "numero",
+        "contenu",
+        "empreinte",
+        "ecrit_le"
+      ],
+      "properties": {
+        "numero": {
+          "description": "Le numero de la version, 1, 2, 3 dans l'ordre. La borne (deux cents versions par situation) est tenue par l'importeur, qui laisse la situation : le validateur du plugin ne connait pas maxItems.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "contenu": {
+          "description": "Le texte de la version, entier. Texte libre, couvert par le rappel d'anonymisation.",
+          "type": "string",
+          "maxLength": 100000
+        },
+        "empreinte": {
+          "description": "SHA-256 du contenu. Verifiee a l'import.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "note": {
+          "description": "La phrase facultative du vaeiste sur cette version.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "restauree_de": {
+          "description": "Le numero de la version que celle-ci restaure, quand elle en restaure une.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "ecrit_le": {
+          "$ref": "#/$defs/date"
+        },
+        "instantane": {
+          "$ref": "#/$defs/details"
+        }
+      }
+    },
+    "lien": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "piece",
+        "partie",
+        "ajoutee_le"
+      ],
+      "properties": {
+        "piece": {
+          "description": "Identifiant de la piece, parmi celles du fichier.",
+          "$ref": "commun/identifiant.schema.json"
+        },
+        "partie": {
+          "description": "La partie de la piece dont il s'agit, 255 caracteres au plus ; vide autorise. Texte libre, couvert par le rappel d'anonymisation.",
+          "type": "string",
+          "maxLength": 255
+        },
+        "ajoutee_le": {
+          "$ref": "#/$defs/date"
+        },
+        "retiree_le": {
+          "description": "Quand le vaeiste a detache la piece de la situation ; la piece reste.",
+          "$ref": "#/$defs/date"
+        }
+      }
+    },
+    "piece": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identifiant",
+        "fiche",
+        "genre",
+        "nature",
+        "ajoutee_le"
+      ],
+      "properties": {
+        "identifiant": {
+          "description": "Identifiant opaque de la piece, aussi le nom sous lequel son fichier est archive.",
+          "$ref": "commun/identifiant.schema.json"
+        },
+        "fiche": {
+          "$ref": "#/$defs/fiche"
+        },
+        "genre": {
+          "description": "Un fichier, ou un lien que le serveur n'a jamais visite.",
+          "enum": [
+            "fichier",
+            "lien"
+          ]
+        },
+        "nature": {
+          "description": "Ce qu'est la piece, dans une liste fermee : celles d'une declaration, et un ecrit professionnel.",
+          "enum": [
+            "payslip",
+            "contract",
+            "employer",
+            "diploma",
+            "jobdescription",
+            "other",
+            "writing"
+          ]
+        },
+        "intitule": {
+          "description": "Texte libre facultatif, couvert par le rappel d'anonymisation. Absent d'une piece retiree et de l'export fait par un tiers.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "ajoutee_le": {
+          "$ref": "#/$defs/date"
+        },
+        "retiree_le": {
+          "description": "Date et heure du retrait, si la piece a ete retiree : le fichier, l'intitule et l'adresse sont alors effaces.",
+          "$ref": "#/$defs/date"
+        },
+        "type": {
+          "description": "Type du fichier, lu sur son contenu. Fichier seulement.",
+          "enum": [
+            "application/pdf",
+            "application/vnd.oasis.opendocument.text",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "image/jpeg",
+            "image/png"
+          ]
+        },
+        "taille": {
+          "description": "Taille du fichier en octets, 30 Mo au plus. Fichier seulement.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 31457280
+        },
+        "sha256": {
+          "description": "Empreinte SHA-256 du fichier, en hexadecimal minuscule. Fichier seulement.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "adresse": {
+          "description": "L'adresse d'un lien, http ou https. Absente de l'export fait par un tiers et d'une piece retiree.",
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 255,
+          "pattern": "^[Hh][Tt][Tt][Pp][Ss]?://[^\\s]+$"
+        },
+        "fichier": {
+          "description": "Le chemin du fichier dans l'archive : pieces-situations/<identifiant de la piece>.<extension du type>. Absent de l'export fait par un tiers et d'une piece retiree.",
+          "type": "string",
+          "pattern": "^pieces-situations/[0-7][0-9A-HJKMNP-TV-Z]{25}\\.(pdf|odt|docx|jpg|png)$"
+        }
+      }
+    },
+    "annotation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identifiant",
+        "cible",
+        "fiche",
+        "emplacement",
+        "rang",
+        "texte",
+        "format",
+        "etat",
+        "empreinte",
+        "ecrit_le"
+      ],
+      "properties": {
+        "identifiant": {
+          "$ref": "commun/identifiant.schema.json"
+        },
+        "cible": {
+          "description": "Ce que l'annotation vise : une situation de travail, ou un element de l'auto-positionnement.",
+          "enum": [
+            "situation",
+            "autopositionnement"
+          ]
+        },
+        "cible_identifiant": {
+          "description": "L'identifiant de la situation visee ; absent pour un element de l'auto-positionnement.",
+          "$ref": "commun/identifiant.schema.json"
+        },
+        "fiche": {
+          "$ref": "#/$defs/fiche"
+        },
+        "emplacement": {
+          "description": "Le numero de la situation visee ; 0 pour un element de l'auto-positionnement.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 30
+        },
+        "rang": {
+          "description": "Le rang de l'element de l'auto-positionnement vise, vide pour le referentiel entier ; vide pour une situation.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9]{0,8}$"
+        },
+        "auteur": {
+          "description": "Identifiant opaque du responsable qui a ecrit la ligne ; absent s'il a ete efface. Jamais un compte du site.",
+          "$ref": "commun/identifiant.schema.json"
+        },
+        "texte": {
+          "description": "L'annotation, quatre mille caracteres au plus ; vide pour un retrait. Texte libre d'un tiers, jamais une validation.",
+          "type": "string",
+          "maxLength": 4000
+        },
+        "format": {
+          "description": "Comment le texte est ecrit : texte simple ou Markdown. Jamais HTML.",
+          "enum": [
+            "texte",
+            "markdown"
+          ]
+        },
+        "etat": {
+          "description": "Une annotation, ou le retrait d'une annotation.",
+          "enum": [
+            "active",
+            "retiree"
+          ]
+        },
+        "retire": {
+          "description": "Pour un retrait : l'identifiant de l'annotation retiree, ecrite avant dans ce fichier par le meme auteur.",
+          "$ref": "commun/identifiant.schema.json"
+        },
+        "empreinte": {
+          "description": "SHA-256 d'une forme canonique de la ligne (cible, fiche, emplacement, rang, texte ; pour un retrait, texte vide puis l'identifiant retire). Verifiee a l'import.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "ecrit_le": {
+          "$ref": "#/$defs/date"
+        }
+      }
+    },
+    "accord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identifiant",
+        "etat",
+        "date"
+      ],
+      "properties": {
+        "identifiant": {
+          "$ref": "commun/identifiant.schema.json"
+        },
+        "responsable": {
+          "description": "Identifiant opaque du responsable a qui l'accord est donne ou retire ; absent s'il a ete efface. Jamais un compte du site.",
+          "$ref": "commun/identifiant.schema.json"
+        },
+        "etat": {
+          "description": "L'accord donne, ou retire.",
+          "enum": [
+            "donne",
+            "retire"
+          ]
+        },
+        "date": {
+          "$ref": "#/$defs/date"
+        }
+      }
+    }
+  }
+}

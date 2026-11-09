@@ -28,6 +28,7 @@ use tool_vae\local\exporter;
 use tool_vae\local\identity_map;
 use tool_vae\local\pdf_renderer;
 use tool_vae\local\purge;
+use tool_vae\local\situation_archive;
 use tool_vae\privacy\provider;
 
 /**
@@ -296,6 +297,20 @@ final class exporter_test extends \advanced_testcase {
             identity_map::uuid_for(identity_map::TYPE_USER, (int) $this->candidate->id),
             $manifest['candidat']['identifiant']
         );
+    }
+
+    public function test_manifest_names_the_release_of_the_site_and_survives_a_site_without_one(): void {
+        global $CFG;
+
+        // A real site holds its release in the configuration; a test site, or one caught between two upgrades, may not.
+        unset($CFG->release);
+        $this->attest($this->declare());
+        $manifest = json_decode($this->build()['manifeste.json'], true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame('', $manifest['produit_par']['version']);
+
+        $CFG->release = '5.3 (Build: 20261005)';
+        $manifest = json_decode($this->build()['manifeste.json'], true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame('5.3 (Build: 20261005)', $manifest['produit_par']['version']);
     }
 
     public function test_archive_carries_the_schema_its_claims_follow(): void {
@@ -1045,13 +1060,25 @@ final class exporter_test extends \advanced_testcase {
         $this->assertFalse(exporter::may_download($file, (int) $file->get_timecreated()));
     }
 
-    public function test_purge_deletes_expired_archives_only(): void {
+    /**
+     * An archive the direction exports, made a day old.
+     *
+     * @return \stored_file
+     */
+    private function expired_export_by_the_direction(): \stored_file {
         global $DB;
 
+        $this->setUser($this->director);
+        $file = (new exporter())->export((int) $this->candidate->id);
+        $DB->set_field('files', 'timecreated', time() - exporter::LIFETIME - 60, ['id' => $file->get_id()]);
+
+        return $file;
+    }
+
+    public function test_purge_deletes_expired_archives_of_other_people_only(): void {
         $this->declare();
-        $old = $this->export_as_candidate();
+        $old = $this->expired_export_by_the_direction();
         $fresh = $this->export_as_candidate();
-        $DB->set_field('files', 'timecreated', time() - exporter::LIFETIME, ['id' => $old->get_id()]);
 
         $this->assertSame(1, exporter::purge_expired(time()));
 
@@ -1060,12 +1087,58 @@ final class exporter_test extends \advanced_testcase {
         $this->assertTrue($fs->file_exists_by_hash($fresh->get_pathnamehash()));
     }
 
-    public function test_scheduled_task_runs_the_purge(): void {
+    public function test_the_archive_of_the_vaeiste_is_kept_after_a_week_and_still_downloadable(): void {
         global $DB;
 
         $this->declare();
-        $old = $this->export_as_candidate();
-        $DB->set_field('files', 'timecreated', time() - exporter::LIFETIME - 60, ['id' => $old->get_id()]);
+        $mine = $this->export_as_candidate();
+        $DB->set_field('files', 'timecreated', time() - 7 * DAYSECS, ['id' => $mine->get_id()]);
+
+        $this->assertSame(0, exporter::purge_expired(time()));
+
+        $this->assertTrue(get_file_storage()->file_exists_by_hash($mine->get_pathnamehash()));
+        $this->setUser($this->candidate);
+        $this->assertTrue(exporter::may_download($mine, time()));
+        $this->assertTrue(exporter::may_download($mine, time() + 400 * DAYSECS), 'No age ends it: the account does.');
+    }
+
+    public function test_a_second_export_by_the_vaeiste_replaces_the_first_and_the_register_keeps_both(): void {
+        global $DB;
+
+        $this->declare();
+        $first = $this->export_as_candidate();
+        $second = $this->export_as_candidate();
+
+        $fs = get_file_storage();
+        $this->assertFalse($fs->file_exists_by_hash($first->get_pathnamehash()), 'One archive per vaeiste.');
+        $this->assertTrue($fs->file_exists_by_hash($second->get_pathnamehash()));
+        $context = \context_user::instance($this->candidate->id);
+        $this->assertCount(
+            1,
+            $fs->get_area_files($context->id, 'tool_vae', exporter::FILEAREA, 0, 'id', false)
+        );
+        $this->assertTrue(
+            $DB->record_exists(exporter::REGISTER, ['archiveuuid' => substr($first->get_filename(), -30, 26)]),
+            'The register keeps the replaced archive: a copy already handed over can still be confirmed.'
+        );
+    }
+
+    public function test_an_export_by_the_direction_neither_replaces_nor_is_replaced_by_the_one_of_the_vaeiste(): void {
+        $this->declare();
+        $mine = $this->export_as_candidate();
+        $this->setUser($this->director);
+        $theirs = (new exporter())->export((int) $this->candidate->id);
+        $again = $this->export_as_candidate();
+
+        $fs = get_file_storage();
+        $this->assertFalse($fs->file_exists_by_hash($mine->get_pathnamehash()), 'The own archive is replaced by the next one.');
+        $this->assertTrue($fs->file_exists_by_hash($theirs->get_pathnamehash()), 'The one of the direction stays.');
+        $this->assertTrue($fs->file_exists_by_hash($again->get_pathnamehash()));
+    }
+
+    public function test_scheduled_task_runs_the_purge(): void {
+        $this->declare();
+        $old = $this->expired_export_by_the_direction();
 
         $this->expectOutputRegex('/1 expired export\(s\) deleted/');
         (new \tool_vae\task\purge_exports())->execute();
@@ -1136,5 +1209,49 @@ final class exporter_test extends \advanced_testcase {
 
         provider::delete_data_for_user(new approved_contextlist($this->manager, 'tool_vae', [$context->id]));
         $this->assertFalse($DB->record_exists('tool_vae_identity', ['itemtype' => 'user', 'itemid' => $managerid]));
+    }
+
+    /**
+     * Lot 1b (D-1b-A): situations.json, its schema and its line of the manifest stand or fall together, and only when the
+     * vaeiste wrote a situation.
+     */
+    public function test_the_archive_carries_the_situations_file_and_its_schema_only_when_a_situation_was_written(): void {
+        $this->declare();
+        $files = $this->build();
+
+        $this->assertArrayNotHasKey(situation_archive::PATH, $files);
+        $this->assertArrayNotHasKey('schema/situations.schema.json', $files);
+        $this->assertArrayNotHasKey('schema_situations', json_decode($files['manifeste.json'], true, 512, JSON_THROW_ON_ERROR));
+        $this->assertStringNotContainsString('situations.json', $files['LISEZMOI.txt']);
+
+        set_config('validationopen', 1, 'tool_vae');
+        $role = $this->getDataGenerator()->create_role();
+        assign_capability('tool/vae:draftown', CAP_ALLOW, $role, \context_system::instance()->id, true);
+        role_assign($role, $this->candidate->id, \context_user::instance($this->candidate->id)->id);
+        accesslib_clear_all_caches_for_unit_testing();
+        $this->getDataGenerator()->get_plugin_generator('tool_vae')->create_situation([
+            'userid' => $this->candidate->id, 'fichecode' => 'RNCP36832', 'title' => 'Un matin', 'text' => 'Mon texte.',
+        ]);
+        $files = $this->build();
+
+        $this->assertArrayHasKey(situation_archive::PATH, $files);
+        $this->assertArrayHasKey('schema/situations.schema.json', $files);
+        $manifest = json_decode($files['manifeste.json'], true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame(situation_archive::SCHEMA_VERSION, $manifest['schema_situations']);
+        $this->assertContains(situation_archive::PATH, array_column($manifest['fichiers'], 'chemin'));
+        $this->assertStringContainsString('situations.json', $files['LISEZMOI.txt']);
+        $this->assertSame([], $this->warnings_of($files), 'The document the exporter writes passes its own schema.');
+    }
+
+    /**
+     * The warnings the exporter would report on an archive's documents, read again from the files.
+     *
+     * @param string[] $files
+     * @return string[]
+     */
+    private function warnings_of(array $files): array {
+        $document = json_decode($files[situation_archive::PATH], false, 512, JSON_THROW_ON_ERROR);
+
+        return (new \tool_vae\local\schema_validator())->validate($document, 'situations.schema.json');
     }
 }

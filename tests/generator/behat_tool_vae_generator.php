@@ -24,7 +24,8 @@
  */
 
 /**
- * Lets a scenario create an imported certification record, declarations and attestations, one line each.
+ * Lets a scenario create an imported certification record, declarations and attestations, one line each; and, for lot 1b,
+ * the work situations of a vaeiste and the lines of their consent.
  *
  * @package    tool_vae
  * @category   test
@@ -82,7 +83,47 @@ class behat_tool_vae_generator extends behat_generator_base {
                 'required' => ['declaration', 'attestant'],
                 'switchids' => ['declaration' => 'evidenceid', 'attestant' => 'userid'],
             ],
+            'evaluations' => [
+                'singular' => 'evaluation',
+                'datagenerator' => 'evaluation',
+                'required' => ['candidate', 'fichecode', 'ficherang', 'author'],
+                'switchids' => ['candidate' => 'candidateid', 'author' => 'authorid'],
+            ],
+            'certifications' => [
+                'singular' => 'certification',
+                'datagenerator' => 'certification',
+                'required' => ['candidate', 'fichecode', 'author'],
+                'switchids' => ['candidate' => 'candidateid', 'author' => 'authorid'],
+            ],
+            'selfpositions' => [
+                'singular' => 'selfposition',
+                'datagenerator' => 'selfpos',
+                'required' => ['candidate', 'fichecode', 'level'],
+                'switchids' => ['candidate' => 'userid'],
+            ],
+            'situations' => [
+                'singular' => 'situation',
+                'datagenerator' => 'situation',
+                'required' => ['candidate', 'fichecode'],
+                'switchids' => ['candidate' => 'userid'],
+            ],
+            'consents' => [
+                'singular' => 'consent',
+                'datagenerator' => 'consent',
+                'required' => ['candidate', 'manager'],
+                'switchids' => ['candidate' => 'userid', 'manager' => 'managerid'],
+            ],
         ];
+    }
+
+    /**
+     * The manager a vaeiste gives or takes back their consent to, named by username.
+     *
+     * @param string $username
+     * @return int
+     */
+    protected function get_manager_id(string $username): int {
+        return $this->get_user_id($username);
     }
 
     /**
@@ -92,6 +133,16 @@ class behat_tool_vae_generator extends behat_generator_base {
      * @return int
      */
     protected function get_candidate_id(string $username): int {
+        return $this->get_user_id($username);
+    }
+
+    /**
+     * The person who writes a positioning, named by username.
+     *
+     * @param string $username
+     * @return int
+     */
+    protected function get_author_id(string $username): int {
         return $this->get_user_id($username);
     }
 

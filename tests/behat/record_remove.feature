@@ -74,7 +74,7 @@ Feature: A manager removes the row of a record imported by mistake
     And I should not see "Moodle holds a competency framework carrying this code"
     And I should not see "Remove this row"
     When I am on the "RNCP36832" "tool_vae > Remove record" page
-    Then I should see "at least one candidate has left a trace on it"
+    Then I should see "at least one vaeiste has left a trace on it"
     And I should see "1 declaration(s)"
     And I should not see "Remove this row"
 

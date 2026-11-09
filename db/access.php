@@ -49,6 +49,17 @@ $capabilities = [
         'archetypes'   => [],
     ],
 
+    // Position oneself on the nodes of one's own record (lot 1a): where the vaeiste says they stand, by a step of a
+    // readable scale, with an optional written justification. Never a validation, never a mark. Held by the vaeiste
+    // alone, in their own user context: nobody positions a vaeiste in their place.
+    // RISK_XSS for the same reason as declare: free text stored outside the core's cleaning.
+    'tool/vae:positionself' => [
+        'riskbitmask'  => RISK_PERSONAL | RISK_XSS,
+        'captype'      => 'write',
+        'contextlevel' => CONTEXT_USER,
+        'archetypes'   => [],
+    ],
+
     // Attest a declaration made by someone else. Never calls the core API.
     'tool/vae:attest' => [
         'riskbitmask'  => RISK_PERSONAL | RISK_XSS,
@@ -195,6 +206,52 @@ $capabilities = [
         'riskbitmask'  => RISK_PERSONAL,
         'captype'      => 'write',
         'contextlevel' => CONTEXT_USER,
+        'archetypes'   => [],
+    ],
+
+    // Evaluate ONE competency of a candidate one follows (T-90, lot 3): a status and a written reason, added to and never
+    // changed. Held by role in the candidate's user context, given by the site and by no archetype; the person must also
+    // follow the candidate and may not evaluate themselves. The administrator follows nobody, so does not evaluate.
+    // RISK_XSS: the reason is free text, stored outside the core cleaning and shown on the dossier.
+    'tool/vae:evaluate' => [
+        'riskbitmask'  => RISK_PERSONAL | RISK_XSS,
+        'captype'      => 'write',
+        'contextlevel' => CONTEXT_USER,
+        'archetypes'   => [],
+    ],
+
+    // Annotate the work situations and the self-positioning of a vaeiste one follows (lot 1b): a signed and dated note, added
+    // to and never changed, never a validation. The text of the vaeiste is never changed by it. Held by role in the
+    // candidate's user context, given by the site and by no archetype; holding it is never enough on its own: the person
+    // must follow the vaeiste and hold the vaeiste's consent, given by name (consent_manager). The direction receives it with
+    // its role, and annotates only a vaeiste it also follows. The administrator follows nobody, so annotates nobody.
+    // RISK_XSS: the note is free text, stored outside the core cleaning and shown on the dossier.
+    'tool/vae:annotate' => [
+        'riskbitmask'  => RISK_PERSONAL | RISK_XSS,
+        'captype'      => 'write',
+        'contextlevel' => CONTEXT_USER,
+        'archetypes'   => [],
+    ],
+
+    // Certify ONE bloc of a candidate (T-90, lot 3): the positioning of the structure, never the validation, which only the
+    // jury gives outside this plugin. Held at the SYSTEM level, and never enough on its own: it goes with tool/vae:viewany,
+    // as the export of another person's dossier does (access::can_export). Nobody certifies their own dossier, the
+    // administrator included. Given by the site, by no archetype.
+    'tool/vae:certify' => [
+        'riskbitmask'  => RISK_PERSONAL | RISK_XSS,
+        'captype'      => 'write',
+        'contextlevel' => CONTEXT_SYSTEM,
+        'archetypes'   => [],
+    ],
+
+    // Produce the archive of the structure (the livret of the accompanying structure) of a candidate, and authorize a manager
+    // to produce it. The positionings of the structure are the structure's word, never a part of the vaeiste's dossiers: they
+    // go in an archive of their own. Held at the SYSTEM level, never enough on its own: it goes with tool/vae:viewany. Given by
+    // the site, by no archetype. A manager the direction authorized produces it for the candidates they follow without it.
+    'tool/vae:issuestructure' => [
+        'riskbitmask'  => RISK_PERSONAL,
+        'captype'      => 'write',
+        'contextlevel' => CONTEXT_SYSTEM,
         'archetypes'   => [],
     ],
 

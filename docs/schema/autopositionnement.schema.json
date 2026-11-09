@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jeanlouismartinez/moodle-tool_vae/schema/autopositionnement.schema.json",
+  "$comment": "Version 0.1.0, 8 novembre 2026 (lot 1a). Ecrit avec le plugin et restaure a l'import : les lignes sont ajoutees et jamais modifiees, l'historique est entier et la derniere ligne de chaque cle (fiche, rang) fait foi. Le fichier est facultatif dans l'archive (version_format reste 1). C'est le positionnement du vaeiste SUR LUI-MEME, JAMAIS une validation ni une note : seul le jury valide, hors de la plateforme. Rien n'en est jamais calcule.",
+  "title": "Auto-positionnement du vaeiste",
+  "description": "Ou le vaeiste dit lui-meme qu'il en est, par un palier d'une echelle en mots, sur chaque element de son referentiel, a tous les niveaux (le referentiel entier, un domaine, une competence, une habilete), avec une justification facultative. Une trace de son developpement, lisible par celles et ceux qui peuvent lire son dossier. Pas une validation : seul le jury valide, hors de la plateforme.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "avertissement",
+    "officiel",
+    "lignes"
+  ],
+  "properties": {
+    "avertissement": {
+      "description": "La phrase qui dit ce que ce fichier est : le positionnement du vaeiste sur lui-meme, non une validation.",
+      "type": "string",
+      "maxLength": 2000
+    },
+    "officiel": {
+      "description": "Toujours faux : rien de ce fichier n'a valeur de decision d'un jury ni de diplome.",
+      "type": "boolean",
+      "enum": [
+        false
+      ]
+    },
+    "lignes": {
+      "description": "Toutes les lignes, de la plus ancienne a la plus recente. La borne (20 000 lignes pour le fichier) est tenue par l'importeur, le validateur du plugin ne connaissant pas maxItems.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "identifiant",
+          "fiche",
+          "rang",
+          "palier",
+          "libelle",
+          "justification",
+          "format",
+          "empreinte",
+          "ecrit_le",
+          "fait_foi"
+        ],
+        "properties": {
+          "identifiant": {
+            "$ref": "commun/identifiant.schema.json"
+          },
+          "fiche": {
+            "description": "Code de la fiche de certification, comme sur une declaration.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          },
+          "rang": {
+            "description": "Rang de l'element dans la fiche, a n'importe quel niveau ; vide pour le referentiel entier.",
+            "type": "string",
+            "pattern": "^[A-Za-z0-9]{0,8}$"
+          },
+          "intitule": {
+            "description": "Intitule publie de l'element, a titre de lecture. Facultatif ; jamais relu a l'import.",
+            "type": "string",
+            "maxLength": 1000
+          },
+          "palier": {
+            "description": "Indice du palier sur l'echelle du site, de 1 a 4 ; 0 retire le niveau que le vaeiste avait donne. Un indice pour distinguer les paliers, jamais une note.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4
+          },
+          "libelle": {
+            "description": "Le libelle du palier tel qu'il se lisait a l'ecriture de la ligne. Garde, jamais recalcule.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "justification": {
+            "description": "Le texte facultatif du vaeiste sur lui-meme. Texte libre, couvert par le rappel d'anonymisation ; vide autorise.",
+            "type": "string",
+            "maxLength": 10000
+          },
+          "format": {
+            "description": "Comment la justification est ecrite : texte simple ou Markdown. Jamais HTML.",
+            "type": "string",
+            "enum": [
+              "texte",
+              "markdown"
+            ]
+          },
+          "empreinte": {
+            "description": "SHA-256 d'une forme canonique de la ligne (palier, libelle, fiche, rang, justification). Verifiee a l'import.",
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "ecrit_le": {
+            "description": "Date et heure d'ecriture, ISO 8601, UTC.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "fait_foi": {
+            "description": "Vrai pour la derniere ligne de la cle (fiche, rang) : celle qui fait foi. Un retrait qui fait foi dit que le vaeiste n'a plus de niveau sur cet element.",
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  }
+}

@@ -147,25 +147,60 @@ class draft_manager {
     /**
      * Whether the current user may read a section of a given kind of document.
      *
-     * THE PREPARATION OF THE VALIDATION DOSSIER IS THE CANDIDATE'S ALONE (MC-16, D-15). Its text is the most intimate of
-     * the dossier - analyses of practice - and the site administrator, who reads the drafts of the dossier de
-     * faisabilite, does not read these: the administrator and the managers read the VERSIONS THE CANDIDATE
-     * DEPOSITED, never the drafts or the history.
+     * THE PREPARATION OF THE VALIDATION DOSSIER IS READ BY WHOEVER MAY VIEW THE DOSSIER (D-1b-G): its author, the
+     * managers who follow the candidate, the direction - in reading only, the latest version and the draft in progress,
+     * as the spec of lot 1b has the manager read "drafts and parts by bloc". tool/vae:draftview plays no part here; it
+     * keeps its role for the dossier de faisabilite.
+     *
+     * THE SITE ADMINISTRATOR STAYS REFUSED (invariant MC-16 / D-15 of the DER): holding everything, they would pass
+     * access::can_view() through viewany, and the rule sets them aside by hand - the one reader it does. What leaves the
+     * platform follows: an archive taken by anyone but the author carries no part by bloc of the preparation (D-1b-A), and
+     * carries the work situations (situations.json) only when the person who takes it may read the preparation by this very
+     * rule - the direction and the managers who follow, never the site administrator (decision of the project owner,
+     * 9 November 2026, exporter::store()); the backup, the safety net of an uninstall, carries them whoever holds it.
+     *
+     * THE JOURNAL STAYS THE AUTHOR'S ALONE: it is not deposited, nobody else reads it.
      *
      * @param int $candidateid
      * @param string $doctype
      * @return bool
      */
     public static function can_read_doctype(int $candidateid, string $doctype): bool {
-        global $USER;
-
-        if ($doctype !== self::DOCTYPE_VALIDATION && $doctype !== self::DOCTYPE_REFLEXION) {
-            return self::can_read($candidateid);
+        if ($doctype === self::DOCTYPE_VALIDATION) {
+            return self::can_read_validation($candidateid);
+        }
+        if ($doctype === self::DOCTYPE_REFLEXION) {
+            return self::is_author($candidateid);
         }
 
-        // The journal is the author's alone, even more than the preparation: it is not deposited, nobody else reads it.
+        return self::can_read($candidateid);
+    }
+
+    /**
+     * Whether the current user is the candidate, writing their own documents.
+     *
+     * @param int $candidateid
+     * @return bool
+     */
+    private static function is_author(int $candidateid): bool {
+        global $USER;
+
         return isloggedin() && !isguestuser() && (int) $USER->id === $candidateid
             && has_capability('tool/vae:draftown', \context_user::instance($candidateid));
+    }
+
+    /**
+     * Whether the current user may read the preparation of this candidate's validation dossier (D-1b-G).
+     *
+     * @param int $candidateid
+     * @return bool
+     */
+    private static function can_read_validation(int $candidateid): bool {
+        if (self::is_author($candidateid)) {
+            return true;
+        }
+
+        return isloggedin() && !isguestuser() && !is_siteadmin() && access::can_view($candidateid);
     }
 
     /**
@@ -188,7 +223,7 @@ class draft_manager {
      */
     public static function label(\stdClass $draft): string {
         if ($draft->doctype === self::DOCTYPE_VALIDATION) {
-            return validation_catalog::label((string) $draft->fichecode, (string) $draft->section);
+            return validation_catalog::label((string) $draft->fichecode, (string) $draft->section, (int) $draft->slot);
         }
         if ($draft->doctype === self::DOCTYPE_REFLEXION) {
             return get_string('reflexionentry', 'tool_vae', (int) $draft->slot);
@@ -256,6 +291,10 @@ class draft_manager {
     /**
      * The section of a document, created empty when it does not exist yet.
      *
+     * NEVER THE DRAFT OF A WORK SITUATION (lot 1b): that draft is opened by situation_manager alone, through
+     * section_of_situation(), with the row of tool_vae_situation that goes with it. Asked here, it is a place this plugin
+     * does not know.
+     *
      * @param int $candidateid
      * @param string $doctype One of DOCTYPES.
      * @param string $section Letters, digits and underscore, 32 at most.
@@ -271,9 +310,58 @@ class draft_manager {
         int $slot = 0,
         ?string $fichecode = null
     ): \stdClass {
+        if ($doctype === self::DOCTYPE_VALIDATION && $section === validation_catalog::SITUATION_SECTION) {
+            throw new \moodle_exception('errordraftsection', 'tool_vae');
+        }
+
+        return $this->open_section($candidateid, $doctype, $section, $slot, (string) $fichecode);
+    }
+
+    /**
+     * The draft of a work situation, created empty when it does not exist yet. RESERVED TO situation_manager (lot 1b).
+     *
+     * The one door to such a draft: situation_manager opens it with the row of tool_vae_situation that goes with it, so that
+     * every version of the text takes its snapshot and the bound of versions holds. Any other caller is a way around them.
+     * The record has only to be offered to the vaeiste (D-1b-F): no declaration is asked first.
+     *
+     * @param int $candidateid
+     * @param int $slot 1..validation_catalog::MAX_SITUATIONS.
+     * @param string $fichecode The record.
+     * @return \stdClass The row of tool_vae_draft.
+     */
+    public function section_of_situation(int $candidateid, int $slot, string $fichecode): \stdClass {
+        return $this->open_section(
+            $candidateid,
+            self::DOCTYPE_VALIDATION,
+            validation_catalog::SITUATION_SECTION,
+            $slot,
+            $fichecode
+        );
+    }
+
+    /**
+     * Whether a row of tool_vae_draft is the draft of a work situation (lot 1b).
+     *
+     * @param \stdClass $draft
+     * @return bool
+     */
+    public static function is_situation_draft(\stdClass $draft): bool {
+        return $draft->doctype === self::DOCTYPE_VALIDATION && $draft->section === validation_catalog::SITUATION_SECTION;
+    }
+
+    /**
+     * The section, created empty when it does not exist yet: the work of section() and section_of_situation().
+     *
+     * @param int $candidateid
+     * @param string $doctype
+     * @param string $section
+     * @param int $slot
+     * @param string $fichecode
+     * @return \stdClass The row of tool_vae_draft.
+     */
+    private function open_section(int $candidateid, string $doctype, string $section, int $slot, string $fichecode): \stdClass {
         global $DB, $USER;
 
-        $fichecode = (string) $fichecode;
         self::require_can_write($candidateid);
         self::check_address($doctype, $section, $slot);
         if (
@@ -296,8 +384,12 @@ class draft_manager {
         if ($doctype === self::DOCTYPE_VALIDATION && !self::validation_open()) {
             throw new \moodle_exception('errorvalidationclosed', 'tool_vae');
         }
-        // And only on a record the candidate declared on, written exactly as this site holds it.
-        if (
+        // And only on a record the candidate declared on, written exactly as this site holds it - except a work situation
+        // (reached through section_of_situation() alone), which asks no declaration first (D-1b-F, as the self-positioning
+        // of lot 1a): the record has only to be offered.
+        if ($doctype === self::DOCTYPE_VALIDATION && $section === validation_catalog::SITUATION_SECTION) {
+            self::require_offered($fichecode);
+        } else if (
             $doctype === self::DOCTYPE_VALIDATION
                 && !$DB->record_exists('tool_vae_evidence', ['candidateid' => $candidateid, 'fichecode' => $fichecode])
         ) {
@@ -411,9 +503,11 @@ class draft_manager {
             }
         } else if ($doctype === self::DOCTYPE_VALIDATION) {
             // A section the record no longer holds - a bloc withdrawn from it - is brought back all the same: what a
-            // candidate wrote is theirs. Only its shape, its slot and the record are checked (T-11, lot 2).
+            // candidate wrote is theirs. Only its shape, its slot and the record are checked (T-11, lot 2). A work situation
+            // is no section of the preparation (D-1b-D): its own file brings it back, never this door.
             if (
-                $slot !== 0 || validation_catalog::parse($section) === null
+                $slot !== 0 || $section === validation_catalog::SITUATION_SECTION
+                    || validation_catalog::parse($section) === null
                     || validation_catalog::structure($fichecode) === null
             ) {
                 throw new \moodle_exception('errordraftsection', 'tool_vae');
@@ -634,7 +728,45 @@ class draft_manager {
      * @throws \moodle_exception errordraftconflict
      */
     public function save_version(int $draftid, string $content, ?string $note = null, ?int $knownworkingat = null): ?\stdClass {
+        return $this->save_version_through($draftid, $content, $note, $knownworkingat, false);
+    }
+
+    /**
+     * Save a version of the text of a work situation. RESERVED TO situation_manager (lot 1b).
+     *
+     * situation_manager calls it inside its own transaction and writes the snapshot of the version next to it: a version
+     * written by any other door would stand without its snapshot and outside the bound of versions. The generic
+     * save_version() refuses such a draft; this door refuses every other.
+     *
+     * @param int $draftid The draft of a work situation.
+     * @param string $content
+     * @param int|null $knownworkingat As for save_version().
+     * @return \stdClass|null As for save_version().
+     * @throws \moodle_exception errordraftsection for a draft that is no work situation.
+     */
+    public function save_version_of_situation(int $draftid, string $content, ?int $knownworkingat = null): ?\stdClass {
+        return $this->save_version_through($draftid, $content, null, $knownworkingat, true);
+    }
+
+    /**
+     * Save a version: the work of save_version() and save_version_of_situation().
+     *
+     * @param int $draftid
+     * @param string $content
+     * @param string|null $note
+     * @param int|null $knownworkingat
+     * @param bool $situation Whether the caller is the door of the work situations.
+     * @return \stdClass|null
+     */
+    private function save_version_through(
+        int $draftid,
+        string $content,
+        ?string $note,
+        ?int $knownworkingat,
+        bool $situation
+    ): ?\stdClass {
         $draft = $this->draft_for_write($draftid);
+        self::require_door($draft, $situation);
         $content = self::normalise($content);
         self::check_length($content);
         // Separate fields: the content is a JSON object of the section's own keys, checked here and
@@ -661,9 +793,37 @@ class draft_manager {
      * @throws \moodle_exception errordraftconflict, errordraftnoversion
      */
     public function restore(int $draftid, int $number, ?int $knownworkingat = null): ?\stdClass {
+        return $this->restore_through($draftid, $number, $knownworkingat, false);
+    }
+
+    /**
+     * Restore an earlier version of the text of a work situation. RESERVED TO situation_manager (lot 1b), as
+     * save_version_of_situation() is, and for the same reason: the new version takes its snapshot next to it.
+     *
+     * @param int $draftid The draft of a work situation.
+     * @param int $number The version to restore.
+     * @param int|null $knownworkingat As for restore().
+     * @return \stdClass|null As for restore().
+     * @throws \moodle_exception errordraftsection for a draft that is no work situation.
+     */
+    public function restore_of_situation(int $draftid, int $number, ?int $knownworkingat = null): ?\stdClass {
+        return $this->restore_through($draftid, $number, $knownworkingat, true);
+    }
+
+    /**
+     * Restore an earlier version: the work of restore() and restore_of_situation().
+     *
+     * @param int $draftid
+     * @param int $number
+     * @param int|null $knownworkingat
+     * @param bool $situation Whether the caller is the door of the work situations.
+     * @return \stdClass|null
+     */
+    private function restore_through(int $draftid, int $number, ?int $knownworkingat, bool $situation): ?\stdClass {
         global $DB;
 
         $draft = $this->draft_for_write($draftid);
+        self::require_door($draft, $situation);
         $old = $DB->get_record('tool_vae_version', ['draftid' => $draftid, 'number' => $number]);
         if (!$old) {
             throw new \moodle_exception('errordraftnoversion', 'tool_vae');
@@ -872,8 +1032,27 @@ class draft_manager {
         if ($draft->doctype === self::DOCTYPE_REFLEXION && !self::reflection_open()) {
             throw new \moodle_exception('errorreflexionclosed', 'tool_vae');
         }
+        // The draft of a work situation is written while its record is offered (D-1b-F), the autosave included: the same
+        // door as situation_manager::for_write() (T15, point F).
+        if (self::is_situation_draft($draft)) {
+            self::require_offered((string) $draft->fichecode);
+        }
 
         return $draft;
+    }
+
+    /**
+     * Refuse a version written through the wrong door: the generic one on the draft of a work situation, or the one of the
+     * work situations on any other draft (lot 1b). The draft in progress is not a version, and takes no door.
+     *
+     * @param \stdClass $draft
+     * @param bool $situation Whether the caller is the door of the work situations.
+     * @throws \moodle_exception errordraftsection
+     */
+    private static function require_door(\stdClass $draft, bool $situation): void {
+        if (self::is_situation_draft($draft) !== $situation) {
+            throw new \moodle_exception('errordraftsection', 'tool_vae');
+        }
     }
 
     /**
@@ -913,6 +1092,30 @@ class draft_manager {
         }
 
         return $lock;
+    }
+
+    /**
+     * Refuse a record that is not offered to the vaeiste: not imported here, or hidden in Moodle (D-1b-F).
+     *
+     * The same answer as the declaration screen gives, from the same place (hidden_frameworks::offered()): a record that is
+     * not imported is a place this plugin does not know; a hidden one is named, with whom to ask. Public for
+     * situation_manager, which asks it again at every write on a situation (a record hidden since it was opened).
+     *
+     * @param string $fichecode
+     * @throws \moodle_exception errordraftsection, errorframeworkhidden
+     */
+    public static function require_offered(string $fichecode): void {
+        global $DB;
+
+        $source = $DB->get_record('tool_vae_source', ['fichecode' => $fichecode]);
+        // A database that folds the case would find "rs00000" for "RS00000": the code is compared exactly.
+        if (!$source || $source->fichecode !== $fichecode) {
+            throw new \moodle_exception('errordraftsection', 'tool_vae');
+        }
+        $hidden = new hidden_frameworks();
+        if (isset($hidden->offered()->hidden[$fichecode])) {
+            throw $hidden->exception($source);
+        }
     }
 
     /**

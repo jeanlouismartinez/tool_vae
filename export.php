@@ -74,8 +74,9 @@ if ($confirm) {
     // whoever later asks whether a copy is the one issued here.
     echo $OUTPUT->header();
     echo $OUTPUT->heading(get_string('exportdossier', 'tool_vae'));
+    // The vaeiste's own archive is kept, one per vaeiste; the one another person exports lives a day.
     echo $OUTPUT->notification(
-        get_string('exportdone', 'tool_vae', (object) [
+        get_string($candidateid === (int) $USER->id ? 'exportdonekept' : 'exportdone', 'tool_vae', (object) [
             'archive' => $registered->archiveuuid,
             'sha256' => $registered->sha256,
         ]),
@@ -129,6 +130,27 @@ $intro = $candidateid === (int) $USER->id
     ? get_string('exportintro', 'tool_vae')
     : get_string('exportintroother', 'tool_vae');
 echo html_writer::tag('p', s($intro));
+$kept = $candidateid === (int) $USER->id ? exporter::kept($candidateid) : null;
+if ($kept) {
+    echo $OUTPUT->notification(
+        s(get_string('exportkeptcurrent', 'tool_vae', (object) [
+            'date' => userdate((int) $kept->get_timecreated()),
+            'id' => substr($kept->get_filename(), -30, 26),
+        ])) . ' ' . html_writer::link(
+            moodle_url::make_pluginfile_url(
+                $kept->get_contextid(),
+                'tool_vae',
+                exporter::FILEAREA,
+                $kept->get_itemid(),
+                $kept->get_filepath(),
+                $kept->get_filename(),
+                true
+            ),
+            get_string('exportdownload', 'tool_vae')
+        ),
+        \core\output\notification::NOTIFY_INFO
+    );
+}
 echo $OUTPUT->notification(
     get_string('exportwithdrawalnotice', 'tool_vae'),
     \core\output\notification::NOTIFY_WARNING

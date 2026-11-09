@@ -355,5 +355,82 @@ function xmldb_tool_vae_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026102601, 'tool', 'vae');
     }
 
+    if ($oldversion < 2026110402) {
+        // T-90, lot 3: the evaluation of a competency by the manager who follows, and the certification of a bloc by the
+        // direction. Two new tables, added to and never changed. Each is created only if it is missing.
+        foreach (['tool_vae_eval', 'tool_vae_certif'] as $table) {
+            if (!$dbman->table_exists($table)) {
+                $dbman->install_one_table_from_xmldb_file(__DIR__ . '/install.xml', $table);
+            }
+        }
+
+        upgrade_plugin_savepoint(true, 2026110402, 'tool', 'vae');
+    }
+
+    if ($oldversion < 2026110403) {
+        // T-90, lot 4: an optional last day on a certification. The column is added where the table was created before it existed.
+        $table = new xmldb_table('tool_vae_certif');
+        $field = new xmldb_field('validuntil', XMLDB_TYPE_CHAR, '10', null, null, null, null, 'decisiondate');
+        if ($dbman->table_exists($table) && !$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        upgrade_plugin_savepoint(true, 2026110403, 'tool', 'vae');
+    }
+
+    if ($oldversion < 2026110406) {
+        // The authorization the direction gives a manager to produce the archive of the structure, and the capability that
+        // writes it (new capabilities are registered by the upgrade itself). One new table, created only if it is missing.
+        if (!$dbman->table_exists('tool_vae_booklet_auth')) {
+            $dbman->install_one_table_from_xmldb_file(__DIR__ . '/install.xml', 'tool_vae_booklet_auth');
+        }
+
+        upgrade_plugin_savepoint(true, 2026110406, 'tool', 'vae');
+    }
+
+    if ($oldversion < 2026110407) {
+        // The self-positioning of the vaeiste (lot 1a): one new table, created only if it is missing, and the capability
+        // tool/vae:positionself, registered by the upgrade itself.
+        if (!$dbman->table_exists('tool_vae_selfpos')) {
+            $dbman->install_one_table_from_xmldb_file(__DIR__ . '/install.xml', 'tool_vae_selfpos');
+        }
+
+        upgrade_plugin_savepoint(true, 2026110407, 'tool', 'vae');
+    }
+
+    if ($oldversion < 2026110408) {
+        // The work situations of the booklet (lot 1b). The core registers db/access.php only after this function has run
+        // (public/lib/upgradelib.php: the upgrade function, then upgrade_component_updated()); the new rights must be in the
+        // table before a role receives them, so they are registered here first. update_capabilities() is idempotent.
+        update_capabilities('tool_vae');
+        // Decision of the project owner, 8 November 2026: an installed Vaeiste role receives the right it lacks.
+        \tool_vae\local\role_installer::grant_missing('vaeiste', 'tool/vae:positionself');
+        // D-1b-C: the same for annotate, new in lot 1b, to the installed roles of the four presets that carry it. A role the
+        // administrator gave a permission of their own for it (prevented, prohibited) is left as it is.
+        $annotators = ['vae_responsable', 'vae_responsable_evaluateur', 'vae_direction', 'vae_direction_certificatrice'];
+        foreach ($annotators as $shortname) {
+            \tool_vae\local\role_installer::grant_missing($shortname, 'tool/vae:annotate');
+        }
+        // Lot 1b: seven tables. Each is created only if it is missing.
+        $tables = [
+            'tool_vae_situation', 'tool_vae_sitversion', 'tool_vae_sitetag', 'tool_vae_spiece', 'tool_vae_slink',
+            'tool_vae_consent', 'tool_vae_note',
+        ];
+        foreach ($tables as $table) {
+            if (!$dbman->table_exists($table)) {
+                $dbman->install_one_table_from_xmldb_file(__DIR__ . '/install.xml', $table);
+            }
+        }
+
+        upgrade_plugin_savepoint(true, 2026110408, 'tool', 'vae');
+    }
+
+    if ($oldversion < 2026110409) {
+        // Publication build (9 November 2026): two screen texts and the documentation corrected, no change of schema, rights
+        // or data. The step exists so that a site already at 2026110408 records the new version and purges its caches, which
+        // is what makes the corrected texts read.
+        upgrade_plugin_savepoint(true, 2026110409, 'tool', 'vae');
+    }
+
     return true;
 }

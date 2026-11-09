@@ -57,7 +57,13 @@ class behat_tool_vae extends behat_base {
      * | Supersession | The replaced records, supersession.php          |
      * | Refs     | The addresses of the rules of validation, refs.php |
      * | Referents | The referents of the blocs, referents.php |
-     * | Scope    | What the candidate says is outside their activity, scope.php |
+     * | Organisation | The pathway of the candidate, organisation.php   |
+     * | Organisation followed | The candidates the reader follows, organisation.php?tab=followed |
+     * | Organisation site | The configuration of the scheme, organisation.php?tab=site |
+     * | Scope   | What the candidate says is outside their activity, scope.php |
+     * | Renewals | The certifications whose date has passed, renewals.php |
+     * | Booklet authorization | The managers authorized to produce the archive of the structure, booklet_authorize.php |
+     * | Pending | The declarations awaiting an attestation, pending.php |
      *
      * @param string $page
      * @return moodle_url
@@ -76,8 +82,22 @@ class behat_tool_vae extends behat_base {
                 return new moodle_url('/admin/tool/vae/import_fiches.php');
             case 'supersession':
                 return new moodle_url('/admin/tool/vae/supersession.php');
+            case 'organisation':
+                return new moodle_url('/admin/tool/vae/organisation.php');
+            case 'organisation followed':
+                return new moodle_url('/admin/tool/vae/organisation.php', ['tab' => 'followed']);
+            case 'organisation site':
+                return new moodle_url('/admin/tool/vae/organisation.php', ['tab' => 'site']);
             case 'scope':
                 return new moodle_url('/admin/tool/vae/scope.php');
+            case 'renewals':
+                return new moodle_url('/admin/tool/vae/renewals.php');
+            case 'booklet authorization':
+                return new moodle_url('/admin/tool/vae/booklet_authorize.php');
+            case 'roles installer':
+                return new moodle_url('/admin/tool/vae/roles_install.php');
+            case 'pending':
+                return new moodle_url('/admin/tool/vae/pending.php');
             case 'referents':
                 return new moodle_url('/admin/tool/vae/referents.php');
             case 'refs':
@@ -103,8 +123,20 @@ class behat_tool_vae extends behat_base {
      * | Piece    | The declaration's situation | Supporting pieces of that declaration, piece.php          |
      * | Deposit  | The user's username        | That candidate's first deposit, deposit.php              |
      * | Passage  | The record's code          | The correspondences for a replaced record, passage.php   |
+     * | Evaluate | "<username> <record>-<rank>" | Evaluating that competency of that candidate, evaluate.php |
+     * | Certify  | "<username> <record>-<rank>" | Certifying that bloc of that candidate, certify.php (no rank: a record with no
+     * bloc) |
+     * | Selfposition | "<username> <record>[-<rank>]" | The self-positioning of that vaeiste, selfposition.php |
+     * | Situations | "<username>[ <record>]" | The work situations of that vaeiste, situations.php      |
+     * | Situation | "<username> <record>-<slot>" | One work situation of that vaeiste, situation.php      |
+     * | Consent  | The user's username         | The consent of that vaeiste to annotations, consent.php  |
      * | Remove record | The record's code     | Removing the row of that record, remove_record.php       |
      * | Import fiches | Any text             | The import from the export of France compétences, import_fiches.php |
+     * | Organisation | Any text              | The pathway of whoever is logged in, organisation.php    |
+     * | Organisation followed | Any text     | The candidates whoever is logged in follows, organisation.php?tab=followed |
+     * | Organisation site | Any text         | The configuration of the scheme, organisation.php?tab=site |
+     * | Renewals | Any text                  | The certifications whose date has passed, renewals.php   |
+     * | Roles installer | Any text           | The creation of the VAE roles from the presets, roles_install.php |
      *
      * The identifier is a USERNAME or a TEXT, never an id: an id is assigned by the database and
      * differs on every run, so a scenario written against one would pass or fail depending on
@@ -124,6 +156,9 @@ class behat_tool_vae extends behat_base {
             case 'export':
                 $userid = $DB->get_field('user', 'id', ['username' => $identifier], MUST_EXIST);
                 return new moodle_url('/admin/tool/vae/export.php', ['userid' => $userid]);
+            case 'structure':
+                $userid = $DB->get_field('user', 'id', ['username' => $identifier], MUST_EXIST);
+                return new moodle_url('/admin/tool/vae/structure.php', ['userid' => $userid]);
             case 'precision':
                 return new moodle_url('/admin/tool/vae/precision.php', [
                     'evidenceid' => $this->get_declaration_id($identifier),
@@ -132,6 +167,51 @@ class behat_tool_vae extends behat_base {
                 return new moodle_url('/admin/tool/vae/piece.php', [
                     'evidenceid' => $this->get_declaration_id($identifier),
                 ]);
+            case 'evaluate':
+            case 'certify':
+                // The identifier is "<username> <record>-<rank>", or "<username> <record>" for the bloc of a record with no bloc.
+                if (!preg_match('/^(\S+) ([A-Za-z0-9]+)(?:-([A-Z0-9]{1,8}))?$/', $identifier, $parts)) {
+                    throw new Exception('The identifier of a positioning page is "<username> <record>-<rank>".');
+                }
+                $userid = $DB->get_field('user', 'id', ['username' => $parts[1]], MUST_EXIST);
+                return new moodle_url('/admin/tool/vae/' . strtolower($page) . '.php', [
+                    'userid' => $userid, 'fichecode' => $parts[2], 'rank' => $parts[3] ?? '',
+                ]);
+            case 'selfposition':
+                // The identifier is "<username> <record>" for the tree of the record, "<username> <record>-<rank>" for one node,
+                // and "<username> <record>-" for the record itself as a node (lot 1a).
+                if (!preg_match('/^(\S+) ([A-Za-z0-9]+)(-([A-Z0-9]{0,8}))?$/', $identifier, $parts)) {
+                    throw new Exception('The identifier of a self-positioning page is "<username> <record>[-<rank>]".');
+                }
+                $userid = $DB->get_field('user', 'id', ['username' => $parts[1]], MUST_EXIST);
+                $params = ['userid' => $userid, 'fiche' => $parts[2]];
+                if (isset($parts[3]) && $parts[3] !== '') {
+                    $params['rank'] = $parts[4];
+                }
+                return new moodle_url('/admin/tool/vae/selfposition.php', $params);
+            case 'situations':
+                // The identifier is "<username>" for the records, "<username> <record>" for the situations of a record (lot 1b).
+                if (!preg_match('/^(\S+)(?: ([A-Za-z0-9]+))?$/', $identifier, $parts)) {
+                    throw new Exception('The identifier of the situations page is "<username>[ <record>]".');
+                }
+                $userid = $DB->get_field('user', 'id', ['username' => $parts[1]], MUST_EXIST);
+                $params = ['userid' => $userid];
+                if (isset($parts[2])) {
+                    $params['fiche'] = $parts[2];
+                }
+                return new moodle_url('/admin/tool/vae/situations.php', $params);
+            case 'situation':
+                // The identifier is "<username> <record>-<slot>": the number of the situation, never its id (lot 1b).
+                if (!preg_match('/^(\S+) ([A-Za-z0-9]+)-(\d+)$/', $identifier, $parts)) {
+                    throw new Exception('The identifier of a situation page is "<username> <record>-<slot>".');
+                }
+                $userid = $DB->get_field('user', 'id', ['username' => $parts[1]], MUST_EXIST);
+                return new moodle_url('/admin/tool/vae/situation.php', [
+                    'userid' => $userid, 'fiche' => $parts[2], 'slot' => (int) $parts[3],
+                ]);
+            case 'consent':
+                $userid = $DB->get_field('user', 'id', ['username' => $identifier], MUST_EXIST);
+                return new moodle_url('/admin/tool/vae/consent.php', ['userid' => $userid]);
             case 'passage':
                 return new moodle_url('/admin/tool/vae/passage.php', ['fiche' => $identifier]);
             case 'remove record':
@@ -139,6 +219,21 @@ class behat_tool_vae extends behat_base {
             case 'import fiches':
                 // No identifier: the page is the same for everybody, the step only asks whether it opens.
                 return new moodle_url('/admin/tool/vae/import_fiches.php');
+            case 'organisation':
+                // No identifier: the page always shows the pathway of whoever is logged in.
+                return new moodle_url('/admin/tool/vae/organisation.php');
+            case 'organisation followed':
+                // No identifier either: the tab always lists the candidates of whoever is logged in.
+                return new moodle_url('/admin/tool/vae/organisation.php', ['tab' => 'followed']);
+            case 'organisation site':
+                // No identifier either: the tab is the configuration of the site, the same for everybody who may read it.
+                return new moodle_url('/admin/tool/vae/organisation.php', ['tab' => 'site']);
+            case 'renewals':
+                // No identifier either: the list is the same for everybody who may open it.
+                return new moodle_url('/admin/tool/vae/renewals.php');
+            case 'roles installer':
+                // No identifier either: the page is the same for everybody who may open it.
+                return new moodle_url('/admin/tool/vae/roles_install.php');
             case 'deposit':
                 $userid = $DB->get_field('user', 'id', ['username' => $identifier], MUST_EXIST);
                 return new moodle_url('/admin/tool/vae/deposit.php', ['userid' => $userid, 'number' => 1]);
@@ -337,6 +432,29 @@ class behat_tool_vae extends behat_base {
         if (!$deleted) {
             throw new Exception('Moodle refused to delete the competency framework of "' . $code . '".');
         }
+    }
+
+    /**
+     * Links an activity of a course to a competency of an imported record, as the teacher does in the course.
+     *
+     * The core's generator has no entity for it. The activity is found by its type and name, the competency by its idnumber
+     * (the code of the record, a dash, the rank).
+     *
+     * @Given the :modname activity :name carries the competency :idnumber
+     * @param string $modname The type of the activity: quiz, assign...
+     * @param string $name The name of the activity.
+     * @param string $idnumber The idnumber of the competency.
+     */
+    public function the_activity_carries_the_competency(string $modname, string $name, string $idnumber): void {
+        global $DB;
+
+        $cm = $this->get_cm_by_activity_name($modname, $name);
+        $competencyid = $DB->get_field('competency', 'id', ['idnumber' => $idnumber]);
+        if (!$competencyid) {
+            throw new Exception('No competency carries the idnumber "' . $idnumber . '".');
+        }
+        $generator = \testing_util::get_data_generator()->get_plugin_generator(\tool_vae\local\competency_gateway::SUBSYSTEM);
+        $generator->create_course_module_competency(['cmid' => $cm->id, 'competencyid' => $competencyid]);
     }
 
     /**

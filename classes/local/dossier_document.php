@@ -119,6 +119,9 @@ final class dossier_document {
             $pieces = piece_overview::by_declaration(piece_overview::document($candidateid, false, $withtitles));
             // What the candidate says is outside their activity (T-42): their own word, without effect.
             $scope = scope_manager::document($candidateid) ?? [];
+            // The positionings of the structure are not in the copies of the vaeiste's dossiers (decision of the project owner,
+            // 7 November 2026): they are the structure's word, in its own archive.
+            $positioning = [];
             $writer = self::compose(
                 $candidate,
                 $snapshot['preuves'],
@@ -127,7 +130,8 @@ final class dossier_document {
                 $faisabilite,
                 $validation,
                 $pieces,
-                $scope
+                $scope,
+                $positioning
             );
         } finally {
             display_date::force_timezone($previoustimezone);
@@ -136,7 +140,15 @@ final class dossier_document {
 
         return [
             'writer' => $writer,
-            'digest' => self::digest($snapshot['preuves'], $snapshot['referentiel'], $faisabilite, $validation, $pieces, $scope),
+            'digest' => self::digest(
+                $snapshot['preuves'],
+                $snapshot['referentiel'],
+                $faisabilite,
+                $validation,
+                $pieces,
+                $scope,
+                $positioning
+            ),
             'declarations' => count($snapshot['preuves']),
         ];
     }
@@ -184,6 +196,8 @@ final class dossier_document {
      * @param array[] $pieces The supporting pieces by declaration (T-13): a piece added or removed makes a new copy.
      * @param array $scope What the candidate says is outside their activity (T-42), as hors_activite.json writes it: a mark
      *        said or taken back makes a new copy. Left out of the digest when empty, so that a dossier with none digests as before.
+     * @param array $positioning The positionings of the structure (T-90, lot 3), as positionnement.json writes them: a line
+     *        added makes a new copy. Left out of the digest when empty, for the same reason.
      * @return string SHA-256, hexadecimal.
      */
     public static function digest(
@@ -192,11 +206,15 @@ final class dossier_document {
         array $faisabilite = [],
         array $validation = [],
         array $pieces = [],
-        array $scope = []
+        array $scope = [],
+        array $positioning = []
     ): string {
         $parts = [self::LAYOUT, $preuves, $referentiel, $faisabilite, $validation, $pieces];
         if ($scope) {
             $parts[] = $scope;
+        }
+        if ($positioning) {
+            $parts[] = $positioning;
         }
 
         return hash('sha256', json_encode($parts, JSON_UNESCAPED_UNICODE));
@@ -217,6 +235,7 @@ final class dossier_document {
      * @param array[] $pieces The supporting pieces by declaration identifier (T-13), as piece_overview::by_declaration() gives
      *        them.
      * @param array $scope What the candidate says is outside their activity (T-42), as hors_activite.json writes it.
+     * @param array $positioning The positionings of the structure (T-90, lot 3), as positionnement.json writes them.
      * @return document_writer
      */
     public static function compose(
@@ -227,7 +246,8 @@ final class dossier_document {
         array $faisabilite = [],
         array $validation = [],
         array $pieces = [],
-        array $scope = []
+        array $scope = [],
+        array $positioning = []
     ): document_writer {
         global $CFG, $SITE;
 
@@ -333,6 +353,13 @@ final class dossier_document {
                 $lines[] = $line;
             }
             $writer->bullets($lines);
+        }
+
+        // The positionings of the structure (T-90, lot 3), with the sentence that says they are not a validation.
+        if (!empty($positioning['evaluations']) || !empty($positioning['certifications'])) {
+            $writer->heading(get_string('positioningdossierheading', 'tool_vae'), 2);
+            $writer->paragraph($positioning['avertissement']);
+            $writer->bullets(positioning_archive::reading_lines($positioning));
         }
 
         // The preparation of the validation dossier, last, with the sentence that says what it is (T-11, MC-17).

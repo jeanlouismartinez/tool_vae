@@ -75,3 +75,12 @@
 .tool-vae-del {
     text-decoration: line-through;
 }
+
+/*
+ * The pathway: the cells of courses and plans are lists, which start at the top of their row whatever the length of the others.
+ * Nothing here ranks a line above another: no colour, no weight, no size.
+ */
+.tool-vae-organisation td,
+.tool-vae-organisation th {
+    vertical-align: top;
+}

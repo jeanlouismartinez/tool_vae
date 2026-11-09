@@ -54,7 +54,7 @@ class remind_pending extends \core\task\scheduled_task {
      */
     public function execute() {
         $days = (int) get_config('tool_vae', 'overduedays');
-        if ($days < 1 || $days > pending_report::MAX_DAYS) {
+        if (!pending_report::is_reminder_days($days)) {
             mtrace('tool_vae: reminders of pending declarations are off.');
             return;
         }

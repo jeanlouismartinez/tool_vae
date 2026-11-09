@@ -37,9 +37,10 @@ use tool_vae\event\supersession_changed;
  *   - Moodle holds no framework for it: neither the one the row points at, nor any other carrying the code (a framework made by
  *     hand, which a new import would take over);
  *   - no candidate has left a trace on the code: a declaration, a mark "Outside my activity", or a section of the preparation
- *     of the validation dossier. Refused outright, with the counts: what a candidate wrote is theirs, and a row is not worth a
- *     dossier. The other tables that carry a declaration (attestations, questions, pieces, carries) hang from a declaration,
- *     and the versions hang from a section, so they need no look of their own.
+ *     of the validation dossier, a positioning, a work situation, a piece of one or an annotation (lot 1b). Refused outright,
+ *     with the counts: what a candidate wrote is theirs, and a row is not worth a dossier. The other tables that carry a
+ *     declaration (attestations, questions, pieces, carries) hang from a declaration, the versions hang from a section, and
+ *     the tags, snapshots and links of a situation hang from it, so they need no look of their own.
  *
  * WHAT GOES WITH THE ROW. Five tables and one column, which is what the review counted as six tables: the provenance row itself
  * (tool_vae_source, with the licence, the attribution, the dates and the replacing record it held), the addresses of the rules
@@ -91,8 +92,8 @@ final class record_remover {
      * @param string $fichecode The code of the record.
      * @return \stdClass|null The language string identifier of the refusal (`errorcode`) and what it is written with (`a`), or
      *         null. errorrefunknownfiche (no such row), errorremoverecordframework (Moodle still holds a framework for the
-     *         record: `a` is its code) or errorremoverecordtraces (a candidate left a trace: `a` carries code, declarations,
-     *         marks and sections).
+     *         record: `a` is its code) or errorremoverecordtraces (a candidate left a trace: `a` carries code and the counts
+     *         of traces()).
      */
     public function refusal(string $fichecode): ?\stdClass {
         global $DB;
@@ -110,7 +111,10 @@ final class record_remover {
         }
 
         $traces = $this->traces($code);
-        if ($traces->declarations || $traces->marks || $traces->sections) {
+        if (
+            $traces->declarations || $traces->marks || $traces->sections || $traces->evaluations || $traces->certifications
+            || $traces->selfpositions || $traces->situations || $traces->spieces || $traces->notes
+        ) {
             $traces->code = $code;
 
             return (object) ['errorcode' => 'errorremoverecordtraces', 'a' => $traces];
@@ -161,8 +165,12 @@ final class record_remover {
      * What candidates have left on a record.
      *
      * @param string $fichecode The code of the record.
-     * @return \stdClass The counts: declarations, marks ("Outside my activity") and sections (of the preparation of the
-     *         validation dossier). All integers.
+     * @return \stdClass The counts: declarations, marks ("Outside my activity"), sections (of the preparation of the
+     *         validation dossier, the drafts of the work situations excepted: a situation is counted once, as a situation),
+     *         evaluations and certifications (the positionings of the structure, history included),
+     *         selfpositions (the self-positioning of the vaeistes, history included; lot 1a), situations (the work
+     *         situations; lot 1b), spieces (their pieces, removed ones included: the trace stands) and notes (the annotations
+     *         on the situations and the self-positioning, withdrawals included; lot 1b). All integers.
      */
     public function traces(string $fichecode): \stdClass {
         global $DB;
@@ -171,7 +179,22 @@ final class record_remover {
             'declarations' => $DB->count_records('tool_vae_evidence', ['fichecode' => $fichecode]),
             'marks' => $DB->count_records('tool_vae_scope', ['fichecode' => $fichecode]),
             // The sections of the dossier de faisabilite and of the journal carry an empty code: never matched against one.
-            'sections' => $fichecode === '' ? 0 : $DB->count_records('tool_vae_draft', ['fichecode' => $fichecode]),
+            // The draft of a work situation is the situation's text: counted with it, never as a section too (T15, G2).
+            'sections' => $fichecode === '' ? 0 : $DB->count_records_select(
+                'tool_vae_draft',
+                'fichecode = :fichecode AND NOT (doctype = :doctype AND section = :section)',
+                [
+                    'fichecode' => $fichecode,
+                    'doctype' => draft_manager::DOCTYPE_VALIDATION,
+                    'section' => validation_catalog::SITUATION_SECTION,
+                ]
+            ),
+            'evaluations' => $DB->count_records('tool_vae_eval', ['fichecode' => $fichecode]),
+            'certifications' => $DB->count_records('tool_vae_certif', ['fichecode' => $fichecode]),
+            'selfpositions' => $DB->count_records('tool_vae_selfpos', ['fichecode' => $fichecode]),
+            'situations' => $DB->count_records('tool_vae_situation', ['fichecode' => $fichecode]),
+            'spieces' => $DB->count_records('tool_vae_spiece', ['fichecode' => $fichecode]),
+            'notes' => $DB->count_records('tool_vae_note', ['fichecode' => $fichecode]),
         ];
     }
 

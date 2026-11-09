@@ -61,15 +61,18 @@ final class validation_status {
     public static function for_record(int $candidateid, string $fichecode): array {
         global $DB;
 
+        // The work situations are not sections of the preparation (D-1b-D): situation_manager::list() says where each stands.
         $rows = $DB->get_records_sql(
             'SELECT d.id, d.section, d.currentversion, d.working, v.timecreated AS versiontime
                FROM {tool_vae_draft} d
           LEFT JOIN {tool_vae_version} v ON v.draftid = d.id AND v.number = d.currentversion
-              WHERE d.candidateid = :candidateid AND d.doctype = :doctype AND d.fichecode = :fichecode',
+              WHERE d.candidateid = :candidateid AND d.doctype = :doctype AND d.fichecode = :fichecode
+                    AND d.section <> :situation',
             [
                 'candidateid' => $candidateid,
                 'doctype' => draft_manager::DOCTYPE_VALIDATION,
                 'fichecode' => $fichecode,
+                'situation' => validation_catalog::SITUATION_SECTION,
             ]
         );
 

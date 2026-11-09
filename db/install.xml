@@ -441,5 +441,268 @@
       </INDEXES>
     </TABLE>
 
+    <TABLE NAME="tool_vae_eval" COMMENT="The evaluation, by the manager who follows a candidate, of ONE competency of a record (T-90, lot 3): a status among toconstruct, inproof, sufficient or withdrawn, and a written reason. A positioning of the structure, never a validation: only the jury validates, outside this plugin. Added to and never changed: a correction or a withdrawal is a new dated line, the latest line stands, nothing is erased but with the candidate.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="uuid" TYPE="char" LENGTH="26" NOTNULL="true" SEQUENCE="false" COMMENT="Identifier for the export; the archive carries it, so that a restoration never writes a row twice."/>
+        <FIELD NAME="candidateid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The candidate the positioning is about."/>
+        <FIELD NAME="fichecode" TYPE="char" LENGTH="32" NOTNULL="true" SEQUENCE="false" COMMENT="The record, as on a declaration, so that the positioning survives a competency removed from the core."/>
+        <FIELD NAME="ficherang" TYPE="char" LENGTH="8" NOTNULL="true" SEQUENCE="false" COMMENT="The rank of the competency in the record (a leaf)."/>
+        <FIELD NAME="status" TYPE="char" LENGTH="16" NOTNULL="true" SEQUENCE="false" COMMENT="toconstruct, inproof, sufficient or withdrawn."/>
+        <FIELD NAME="reason" TYPE="text" NOTNULL="true" SEQUENCE="false" COMMENT="The written reason. FREE TEXT of a third party about the candidate; never a verdict the plugin computes."/>
+        <FIELD NAME="reasonhash" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false" COMMENT="SHA-256 of a canonical form of the whole line (status, record, rank, reason and, for a certification, the date and the alert reason)."/>
+        <FIELD NAME="authorid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Who wrote it. Nulled on that person's erasure; the text stays."/>
+        <FIELD NAME="authoruuid" TYPE="char" LENGTH="26" NOTNULL="false" SEQUENCE="false" COMMENT="The author of a line restored from an archive, by the ULID the archive gives: they hold no account here, so authorid is null. Emptied with the erasure of that ULID."/>
+        <FIELD NAME="importedat" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="When this line was restored from an archive. Null for a line written on this site."/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="candidateid" TYPE="foreign" FIELDS="candidateid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="uuid" UNIQUE="true" FIELDS="uuid"/>
+        <INDEX NAME="candidaterank" UNIQUE="false" FIELDS="candidateid, fichecode, ficherang, id"/>
+        <INDEX NAME="authorid" UNIQUE="false" FIELDS="authorid"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="tool_vae_certif" COMMENT="The certification, by the direction, of ONE bloc of a record (T-90, lot 3): the positioning of the structure, never the validation, which only the jury gives outside this plugin. A status (certified or withdrawn), a written reason, the date of the decision and, when a competency of the bloc is not sufficient, the reason of the alert. Added to and never changed: the latest line stands.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="uuid" TYPE="char" LENGTH="26" NOTNULL="true" SEQUENCE="false" COMMENT="Identifier for the export; the archive carries it, so that a restoration never writes a row twice."/>
+        <FIELD NAME="candidateid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The candidate the positioning is about."/>
+        <FIELD NAME="fichecode" TYPE="char" LENGTH="32" NOTNULL="true" SEQUENCE="false" COMMENT="The record, as on a declaration, so that the positioning survives a competency removed from the core."/>
+        <FIELD NAME="ficherang" TYPE="char" LENGTH="8" NOTNULL="true" SEQUENCE="false" COMMENT="The rank of the bloc in the record; empty for a record with no bloc, which is its own bloc."/>
+        <FIELD NAME="status" TYPE="char" LENGTH="16" NOTNULL="true" SEQUENCE="false" COMMENT="certified or withdrawn."/>
+        <FIELD NAME="reason" TYPE="text" NOTNULL="true" SEQUENCE="false" COMMENT="The written reason. FREE TEXT of a third party about the candidate; never a verdict the plugin computes."/>
+        <FIELD NAME="reasonhash" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false" COMMENT="SHA-256 of a canonical form of the whole line (status, record, rank, reason and, for a certification, the date and the alert reason)."/>
+        <FIELD NAME="decisiondate" TYPE="char" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The date of the decision, as YYYY-MM-DD and never converted by a time zone."/>
+        <FIELD NAME="validuntil" TYPE="char" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Optional: the last day the certification stands, as YYYY-MM-DD and never converted by a time zone. Null: it does not lapse. Past it, the dossier says it is due to be renewed; nothing is written, a renewal is a new line."/>
+        <FIELD NAME="alertreason" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Why the bloc was certified although a competency of it is not sufficient. Required then, empty otherwise."/>
+        <FIELD NAME="authorid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Who wrote it. Nulled on that person's erasure; the text stays."/>
+        <FIELD NAME="authoruuid" TYPE="char" LENGTH="26" NOTNULL="false" SEQUENCE="false" COMMENT="The author of a line restored from an archive, by the ULID the archive gives: they hold no account here, so authorid is null. Emptied with the erasure of that ULID."/>
+        <FIELD NAME="importedat" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="When this line was restored from an archive. Null for a line written on this site."/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="candidateid" TYPE="foreign" FIELDS="candidateid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="uuid" UNIQUE="true" FIELDS="uuid"/>
+        <INDEX NAME="candidaterank" UNIQUE="false" FIELDS="candidateid, fichecode, ficherang, id"/>
+        <INDEX NAME="authorid" UNIQUE="false" FIELDS="authorid"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="tool_vae_selfpos" COMMENT="The self-positioning of the vaeiste (lot 1a): where THEY say they stand, by a step of a readable scale, on ONE node of a record at ANY level, with an optional written justification. The positioning of the vaeiste, never a validation: nothing is ever computed from it, and only the jury validates, outside this plugin. Added to and never changed: a correction or a withdrawal (level 0) is a new dated line, the latest line stands. The vaeiste is the only author: there is no author column.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="uuid" TYPE="char" LENGTH="26" NOTNULL="true" SEQUENCE="false" COMMENT="Identifier for the export; the archive carries it, so that a restoration never writes a row twice."/>
+        <FIELD NAME="candidateid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The vaeiste, who is also the author."/>
+        <FIELD NAME="fichecode" TYPE="char" LENGTH="32" NOTNULL="true" SEQUENCE="false" COMMENT="The record, as on a declaration, so that the line survives a competency removed from the core."/>
+        <FIELD NAME="ficherang" TYPE="char" LENGTH="8" NOTNULL="true" SEQUENCE="false" COMMENT="The rank of the node in the record, at any level; empty for the record as a whole (level 1)."/>
+        <FIELD NAME="level" TYPE="int" LENGTH="2" NOTNULL="true" SEQUENCE="false" COMMENT="The index of the step on the scale, 1 to 4; 0 withdraws the level the vaeiste had given, without erasing anything."/>
+        <FIELD NAME="levellabel" TYPE="char" LENGTH="100" NOTNULL="true" SEQUENCE="false" COMMENT="The label of the step as it read when the line was written. Kept, never recomputed: the administrator may rename a step later."/>
+        <FIELD NAME="justification" TYPE="text" NOTNULL="true" SEQUENCE="false" COMMENT="Optional FREE TEXT of the vaeiste about themselves, at most ten thousand characters; empty allowed. Never a verdict."/>
+        <FIELD NAME="justificationformat" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="2" SEQUENCE="false" COMMENT="FORMAT_PLAIN (2) or FORMAT_MARKDOWN (4); never HTML."/>
+        <FIELD NAME="linehash" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false" COMMENT="SHA-256 of a canonical form of the line (level, label, record, rank, justification), so that a line identical to the latest is refused and a restoration can be checked."/>
+        <FIELD NAME="importedat" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="When this line was restored from an archive. Null for a line written on this site."/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="candidateid" TYPE="foreign" FIELDS="candidateid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="uuid" UNIQUE="true" FIELDS="uuid"/>
+        <INDEX NAME="candidaterank" UNIQUE="false" FIELDS="candidateid, fichecode, ficherang, id"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="tool_vae_booklet_auth" COMMENT="The authorization the direction gives a manager to produce the archive of the structure (the livret of the accompanying structure), once for the manager, valid for every candidate they follow. A line is added, never changed: the latest line of a manager says whether the authorization stands (granted) or was taken back (revoked).">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="managerid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The manager the authorization is about. Its lines go with that account."/>
+        <FIELD NAME="grantedby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="The account of the direction that wrote the line. Nulled on that person's erasure; the line stays."/>
+        <FIELD NAME="status" TYPE="char" LENGTH="8" NOTNULL="true" SEQUENCE="false" COMMENT="granted or revoked."/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="managerid" TYPE="foreign" FIELDS="managerid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="managerline" UNIQUE="false" FIELDS="managerid, id"/>
+        <INDEX NAME="grantedby" UNIQUE="false" FIELDS="grantedby"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="tool_vae_situation" COMMENT="A work situation of the vaeiste (lot 1b): a part of the booklet of validation, written by the vaeiste alone, with its own draft and versions. The row carries the CURRENT title, period and setting, saved by their own button; each version of the text takes a snapshot of them. At most thirty per vaeiste and record. Never a validation: only the jury validates, outside this plugin.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="uuid" TYPE="char" LENGTH="26" NOTNULL="true" SEQUENCE="false" COMMENT="Identifier for the export; the archive carries it, so that a restoration never writes a row twice, and an annotation names the situation by it."/>
+        <FIELD NAME="candidateid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The vaeiste, who is also the only author."/>
+        <FIELD NAME="fichecode" TYPE="char" LENGTH="32" NOTNULL="true" SEQUENCE="false" COMMENT="The record, as on a declaration, so that the situation survives a competency removed from the core."/>
+        <FIELD NAME="slot" TYPE="int" LENGTH="4" NOTNULL="true" SEQUENCE="false" COMMENT="The number of the situation for this vaeiste and record, 1..n; the slot of its draft."/>
+        <FIELD NAME="draftid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The draft that holds the text in progress and the versions of the situation; one draft for one situation."/>
+        <FIELD NAME="title" TYPE="char" LENGTH="60" NOTNULL="true" SEQUENCE="false" COMMENT="The title the vaeiste gives, sixty characters at most. FREE TEXT, covered by the anonymisation reminder."/>
+        <FIELD NAME="periodstart" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="The first day of the period of the situation, if the vaeiste gives one."/>
+        <FIELD NAME="periodend" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="The last day of the period of the situation, if the vaeiste gives one."/>
+        <FIELD NAME="setting" TYPE="char" LENGTH="100" NOTNULL="true" SEQUENCE="false" COMMENT="The setting (place, service, structure), a hundred characters at most; empty allowed, written by the code. FREE TEXT, covered by the anonymisation reminder."/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="candidateid" TYPE="foreign" FIELDS="candidateid" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="draftid" TYPE="foreign-unique" FIELDS="draftid" REFTABLE="tool_vae_draft" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="uuid" UNIQUE="true" FIELDS="uuid"/>
+        <INDEX NAME="candidateslot" UNIQUE="true" FIELDS="candidateid, fichecode, slot"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="tool_vae_sitversion" COMMENT="The snapshot a version of the text of a work situation takes of its title, period, setting and tags (lot 1b), so that each version shows what it carried. Written by the vaeiste alone, with the version; added to and never changed. Restoring a version restores the text alone, not the snapshot.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="situationid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The situation."/>
+        <FIELD NAME="number" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The number of the version of the draft this snapshot goes with."/>
+        <FIELD NAME="title" TYPE="char" LENGTH="60" NOTNULL="true" SEQUENCE="false" COMMENT="The title as it read when the version was written."/>
+        <FIELD NAME="periodstart" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="The first day of the period as it read when the version was written."/>
+        <FIELD NAME="periodend" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="The last day of the period as it read when the version was written."/>
+        <FIELD NAME="setting" TYPE="char" LENGTH="100" NOTNULL="true" SEQUENCE="false" COMMENT="The setting as it read when the version was written; empty allowed, written by the code."/>
+        <FIELD NAME="tags" TYPE="text" NOTNULL="true" SEQUENCE="false" COMMENT="The ranks of the tags, sorted by strnatcmp and separated by a comma; empty without a tag."/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="situationid" TYPE="foreign" FIELDS="situationid" REFTABLE="tool_vae_situation" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="situationnumber" UNIQUE="true" FIELDS="situationid, number"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="tool_vae_sitetag" COMMENT="A tag of a work situation (lot 1b): a node of level two or more of the record, which the vaeiste says the situation shows. Written by the vaeiste alone, saved by its own button; zero tags is allowed. A tag says what the vaeiste claims, never a validation.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="situationid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The situation."/>
+        <FIELD NAME="candidateid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The vaeiste, so that the situations of a node are read without a join."/>
+        <FIELD NAME="fichecode" TYPE="char" LENGTH="32" NOTNULL="true" SEQUENCE="false" COMMENT="The record, as on a declaration."/>
+        <FIELD NAME="ficherang" TYPE="char" LENGTH="8" NOTNULL="true" SEQUENCE="false" COMMENT="The rank of the node in the record, of level two or more; never empty."/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="situationid" TYPE="foreign" FIELDS="situationid" REFTABLE="tool_vae_situation" REFFIELDS="id"/>
+        <KEY NAME="candidateid" TYPE="foreign" FIELDS="candidateid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="situationrank" UNIQUE="true" FIELDS="situationid, ficherang"/>
+        <INDEX NAME="candidaterank" UNIQUE="false" FIELDS="candidateid, fichecode, ficherang"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="tool_vae_spiece" COMMENT="A supporting piece of the work situations (lot 1b), written by the vaeiste alone: a file kept in the plugin's own file area, or a link, under the same rules as tool_vae_piece, with one more nature (writing, a professional writing). Never changed, except by its removal, which erases the file, the title and the address and keeps the rest. The original name of a file is NEVER kept. One piece may serve several situations and is counted once.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="uuid" TYPE="char" LENGTH="26" NOTNULL="true" SEQUENCE="false" COMMENT="Identifier for the export; the archive carries it, so that a restoration never writes a row twice."/>
+        <FIELD NAME="candidateid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The vaeiste, who is also the only author."/>
+        <FIELD NAME="fichecode" TYPE="char" LENGTH="32" NOTNULL="true" SEQUENCE="false" COMMENT="The record, as on a declaration."/>
+        <FIELD NAME="kind" TYPE="char" LENGTH="8" NOTNULL="true" SEQUENCE="false" COMMENT="file or link."/>
+        <FIELD NAME="nature" TYPE="char" LENGTH="16" NOTNULL="true" SEQUENCE="false" COMMENT="What the piece is, as for tool_vae_piece, or writing (a professional writing)."/>
+        <FIELD NAME="title" TYPE="char" LENGTH="60" NOTNULL="true" SEQUENCE="false" COMMENT="The title the vaeiste gives; erased (empty) on removal. FREE TEXT, covered by the anonymisation reminder."/>
+        <FIELD NAME="ext" TYPE="char" LENGTH="4" NOTNULL="false" SEQUENCE="false" COMMENT="The extension of a file, from its detected type; null for a link."/>
+        <FIELD NAME="mimetype" TYPE="char" LENGTH="100" NOTNULL="false" SEQUENCE="false" COMMENT="The type detected on the content of a file; null for a link."/>
+        <FIELD NAME="filesize" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="The size of a file in bytes; null for a link."/>
+        <FIELD NAME="sha256" TYPE="char" LENGTH="64" NOTNULL="false" SEQUENCE="false" COMMENT="SHA-256 of the content of a file; null for a link."/>
+        <FIELD NAME="url" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false" COMMENT="The address of a link, never visited by the plugin; null for a file, erased on removal."/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timeremoved" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="When the vaeiste removed the piece; null while it stands."/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="candidateid" TYPE="foreign" FIELDS="candidateid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="uuid" UNIQUE="true" FIELDS="uuid"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="tool_vae_slink" COMMENT="The link between a work situation and a supporting piece (lot 1b), with the part of the piece the situation is about. Written by the vaeiste alone; at most five active pieces per situation. Removing the link leaves the piece.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="situationid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The situation."/>
+        <FIELD NAME="pieceid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The piece."/>
+        <FIELD NAME="part" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false" COMMENT="The part of the piece the situation is about, 255 characters at most; empty allowed, written by the code. FREE TEXT, covered by the anonymisation reminder."/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timeremoved" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="When the vaeiste removed the link; null while it stands."/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="situationid" TYPE="foreign" FIELDS="situationid" REFTABLE="tool_vae_situation" REFFIELDS="id"/>
+        <KEY NAME="pieceid" TYPE="foreign" FIELDS="pieceid" REFTABLE="tool_vae_spiece" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="situationpiece" UNIQUE="true" FIELDS="situationid, pieceid"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="tool_vae_consent" COMMENT="The consent the vaeiste gives, by name, to a manager who follows them, to annotate their work situations and self-positioning (lot 1b). Written by the vaeiste alone. Added to and never changed: the latest line of a (vaeiste, manager) says whether the consent stands (given) or was taken back (withdrawn). A line restored from an archive never opens the annotation.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="uuid" TYPE="char" LENGTH="26" NOTNULL="true" SEQUENCE="false" COMMENT="Identifier for the export; the archive carries it, so that a restoration never writes a row twice."/>
+        <FIELD NAME="candidateid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The vaeiste, who is also the only author."/>
+        <FIELD NAME="managerid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="The manager the consent is given to. Null for a line restored from an archive (manageruuid names them). When the person named is erased, the line is deleted: a consent given to nobody has no meaning."/>
+        <FIELD NAME="manageruuid" TYPE="char" LENGTH="26" NOTNULL="false" SEQUENCE="false" COMMENT="The manager of a line restored from an archive, by the ULID the archive gives: they hold no account here. Null for a line written on this site."/>
+        <FIELD NAME="state" TYPE="char" LENGTH="9" NOTNULL="true" SEQUENCE="false" COMMENT="given or withdrawn."/>
+        <FIELD NAME="importedat" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="When this line was restored from an archive. Null for a line written on this site."/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="candidateid" TYPE="foreign" FIELDS="candidateid" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="managerid" TYPE="foreign" FIELDS="managerid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="uuid" UNIQUE="true" FIELDS="uuid"/>
+        <INDEX NAME="candidatemanager" UNIQUE="false" FIELDS="candidateid, managerid, id"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="tool_vae_note" COMMENT="An annotation, by a manager the vaeiste consented to, on a work situation or on a node of the self-positioning (lot 1b). FREE TEXT of a third party about the vaeiste, never a validation and never a verdict the plugin computes: only the jury validates, outside this plugin. The text of the vaeiste is never changed by it. Added to and never changed: a withdrawal is a new dated line that names the annotation it withdraws.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="uuid" TYPE="char" LENGTH="26" NOTNULL="true" SEQUENCE="false" COMMENT="Identifier for the export; the archive carries it, so that a restoration never writes a row twice."/>
+        <FIELD NAME="candidateid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The vaeiste the annotation is about."/>
+        <FIELD NAME="target" TYPE="char" LENGTH="9" NOTNULL="true" SEQUENCE="false" COMMENT="situation or selfpos."/>
+        <FIELD NAME="targetuuid" TYPE="char" LENGTH="26" NOTNULL="true" SEQUENCE="false" COMMENT="The uuid of the situation; empty for a node of the self-positioning, written by the code."/>
+        <FIELD NAME="fichecode" TYPE="char" LENGTH="32" NOTNULL="true" SEQUENCE="false" COMMENT="The record, as on a declaration."/>
+        <FIELD NAME="slot" TYPE="int" LENGTH="4" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="The number of the situation; 0 for a node of the self-positioning."/>
+        <FIELD NAME="ficherang" TYPE="char" LENGTH="8" NOTNULL="true" SEQUENCE="false" COMMENT="The rank of the node of the self-positioning; empty for a situation or for the record as a whole, written by the code."/>
+        <FIELD NAME="authorid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Who wrote it. Null for a line restored from an archive, or when that person was erased; the text stays."/>
+        <FIELD NAME="authoruuid" TYPE="char" LENGTH="26" NOTNULL="false" SEQUENCE="false" COMMENT="The author of a line restored from an archive, by the ULID the archive gives: they hold no account here. Null for a line written on this site."/>
+        <FIELD NAME="text" TYPE="text" NOTNULL="true" SEQUENCE="false" COMMENT="The annotation, four thousand characters at most; empty for a withdrawal. FREE TEXT of a third party, never a validation."/>
+        <FIELD NAME="textformat" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="2" SEQUENCE="false" COMMENT="FORMAT_PLAIN (2) or FORMAT_MARKDOWN (4); never HTML."/>
+        <FIELD NAME="state" TYPE="char" LENGTH="9" NOTNULL="true" SEQUENCE="false" COMMENT="active or withdrawn."/>
+        <FIELD NAME="withdraws" TYPE="char" LENGTH="26" NOTNULL="false" SEQUENCE="false" COMMENT="The uuid of the annotation this line withdraws; null for an annotation."/>
+        <FIELD NAME="notehash" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false" COMMENT="SHA-256 of a canonical form of the line, so that a restoration can be checked."/>
+        <FIELD NAME="importedat" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="When this line was restored from an archive. Null for a line written on this site."/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="candidateid" TYPE="foreign" FIELDS="candidateid" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="authorid" TYPE="foreign" FIELDS="authorid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="uuid" UNIQUE="true" FIELDS="uuid"/>
+        <INDEX NAME="candidatetarget" UNIQUE="false" FIELDS="candidateid, target, fichecode, slot, ficherang, id"/>
+      </INDEXES>
+    </TABLE>
+
   </TABLES>
 </XMLDB>

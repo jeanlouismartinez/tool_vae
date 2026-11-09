@@ -180,6 +180,42 @@ final class candidate_overview_test extends \advanced_testcase {
         $this->assertSame(1, $counts[(int) $this->denis->id]->declarations);
     }
 
+    public function test_narrowing_keeps_a_choice_the_reader_is_referent_of(): void {
+        referent_manager::add('RS00000', 'BC01', (int) $this->manager->id);
+
+        $narrowing = candidate_overview::narrowing((int) $this->manager->id, 'RS00000|BC01');
+
+        $this->assertSame('RS00000|BC01', $narrowing->chosen);
+        $this->assertSame('RS00000', $narrowing->fichecode);
+        $this->assertEqualsCanonicalizing(['BC01', 'C01'], $narrowing->ranks);
+        $this->assertSame(['RS00000|BC01'], array_keys($narrowing->choices));
+        $this->assertSame('BC01', $narrowing->choices['RS00000|BC01']->ficherang);
+    }
+
+    public function test_narrowing_ignores_a_choice_the_reader_is_not_referent_of(): void {
+        referent_manager::add('RS00000', 'BC01', (int) $this->manager->id);
+
+        foreach (['RS00000|BC02', 'zzz', 'RS00000'] as $value) {
+            $narrowing = candidate_overview::narrowing((int) $this->manager->id, $value);
+            $this->assertSame('', $narrowing->chosen, $value);
+            $this->assertSame('', $narrowing->fichecode, $value);
+            $this->assertNull($narrowing->ranks, $value);
+            $this->assertSame(['RS00000|BC01'], array_keys($narrowing->choices), $value);
+        }
+        // Somebody who is referent of nothing has no choice at all.
+        $this->assertSame([], candidate_overview::narrowing((int) $this->denis->id, 'RS00000|BC01')->choices);
+    }
+
+    public function test_narrowing_of_the_whole_record_is_no_restriction_on_ranks(): void {
+        referent_manager::add('RS00000', '', (int) $this->manager->id);
+
+        $narrowing = candidate_overview::narrowing((int) $this->manager->id, 'RS00000');
+
+        $this->assertSame('RS00000', $narrowing->chosen);
+        $this->assertSame('RS00000', $narrowing->fichecode);
+        $this->assertNull($narrowing->ranks);
+    }
+
     public function test_the_whole_record_is_not_a_restriction_on_the_ranks(): void {
         $this->spread();
         $this->assertNull(referent_manager::ranks_under('RS00000', ''));

@@ -102,6 +102,15 @@ if ($form->get_data()) {
     // And what no archive brings back is said as plainly as what came back: the count above is of what was written, and
     // says nothing of the deposits, the opinions and the questions that stayed behind (or were lost with a reinstall).
     \core\notification::info(get_string('importdossierabsent', 'tool_vae'));
+    if (!empty($result->positionnement) || !empty($result->positionnementlaissees)) {
+        \core\notification::info(get_string('importdossierpositioning', 'tool_vae', $result));
+    }
+    if (!empty($result->autopositionnement) || !empty($result->autopositionnementlaissees)) {
+        \core\notification::info(get_string('importdossierselfpos', 'tool_vae', $result));
+    }
+    if (!empty($result->situations) || !empty($result->situationslaissees)) {
+        \core\notification::info(get_string('importdossiersituations', 'tool_vae', $result));
+    }
 
     redirect(
         $dossierurl,

@@ -147,6 +147,18 @@ if ($hassiteconfig) {
         new lang_string('piecenoantivirus_desc', 'tool_vae'),
         0
     ));
+    // The four steps the vaeiste positions themselves on (lot 1a): words, not marks, the same for the whole site. A step
+    // renamed here does not change the lines already written, which keep the label they were written with.
+    for ($step = 1; $step <= \tool_vae\local\selfpos_scale::COUNT; $step++) {
+        $settings->add(new admin_setting_configtext(
+            'tool_vae/selfposlabel' . $step,
+            new lang_string('selfposlabel' . $step, 'tool_vae'),
+            new lang_string('selfposlabel_desc', 'tool_vae', new lang_string('selfposlabeldefault' . $step, 'tool_vae')),
+            '',
+            PARAM_TEXT,
+            60
+        ));
+    }
     // The scale given to the framework of an imported record. Automatic, it is the core's default competence scale found by
     // its name, which a site that renamed it never matches (competency_gateway::default_competence_scale()). Only the scales
     // of the whole site are offered: a course's own scale is never taken.
@@ -173,6 +185,51 @@ if ($hassiteconfig || has_capability('tool/vae:viewany', context_system::instanc
         new lang_string('pendingheading', 'tool_vae'),
         new moodle_url('/admin/tool/vae/pending.php'),
         'tool/vae:viewany'
+    ));
+    // The configuration of the scheme (T-90): the address carries the tab, so that the menu opens "Organisation".
+    $ADMIN->add('competencies', new admin_externalpage(
+        'toolvae_organisation',
+        new lang_string('orgtabsite', 'tool_vae'),
+        new moodle_url('/admin/tool/vae/organisation.php', ['tab' => 'site']),
+        'tool/vae:viewany'
+    ));
+}
+
+// The certifications whose date has passed (T-90, plan 7): an admin_externalpage asks for ONE capability, and the page needs
+// two - to read every dossier and to certify - so it is filed only for who holds both, and the page asks for both again.
+if (
+    has_capability('tool/vae:viewany', context_system::instance())
+    && has_capability('tool/vae:certify', context_system::instance())
+) {
+    $ADMIN->add('competencies', new admin_externalpage(
+        'toolvae_renewals',
+        new lang_string('renewalsheading', 'tool_vae'),
+        new moodle_url('/admin/tool/vae/renewals.php'),
+        'tool/vae:viewany'
+    ));
+}
+
+// The managers the direction authorized to produce the archive of the structure: as the renewals, an admin_externalpage asks for
+// ONE capability and the page needs two, so it is filed only for who holds both, and the page asks for both again.
+if (
+    has_capability('tool/vae:viewany', context_system::instance())
+    && has_capability('tool/vae:issuestructure', context_system::instance())
+) {
+    $ADMIN->add('competencies', new admin_externalpage(
+        'toolvae_bookletauth',
+        new lang_string('bookletauthheading', 'tool_vae'),
+        new moodle_url('/admin/tool/vae/booklet_authorize.php'),
+        'tool/vae:viewany'
+    ));
+}
+
+// The VAE roles, created from the presets shipped with the plugin: for whoever may manage roles.
+if ($hassiteconfig || has_capability('moodle/role:manage', context_system::instance())) {
+    $ADMIN->add('competencies', new admin_externalpage(
+        'toolvae_roles',
+        new lang_string('rolesheading', 'tool_vae'),
+        new moodle_url('/admin/tool/vae/roles_install.php'),
+        'moodle/role:manage'
     ));
 }
 

@@ -73,6 +73,18 @@ function xmldb_tool_vae_uninstall() {
     // this - the reflective journal and the preparation of the validation dossier. They go with the tables: say so to
     // whoever asks, and export the database first if those texts must be kept. Each archive says it in its LISEZMOI.txt.
     //
+    // THE POSITIONINGS OF THE STRUCTURE DO COME BACK (T-90, lot 3): the evaluations of the competencies and the certifications of
+    // the blocs, with their history, are in positionnement.json of the backup and of the archive of the structure - never of the
+    // archive the vaeiste takes away (decision of the project owner, 7 November 2026) - and an import restores them. One limit: a
+    // backup is made of the dossiers that hold a declaration, so the positionings of a candidate left with no declaration at all
+    // are not in it. Say so to whoever asks.
+    //
+    // THE VAEISTE'S OWN WORD COMES BACK TOO (lot 1a and lot 1b): autopositionnement.json, their positioning by level, and
+    // situations.json, their work situations with the versions of their text, their pieces, the annotations of the managers they
+    // consented to and the lines of that consent, are in the backup of every dossier that holds a declaration, and an import
+    // restores them; a vaeiste who only positioned themselves or only wrote situations, with no declaration, has no backup.
+    // The backup is whole, and the administrator who runs it can read it: say so to whoever asks.
+    //
     // It does not depend on the competencies being switched on: the labels it writes are read from the persistents, not
     // through the core's API that refuses when the subsystem is off (exporter::referentiel()).
     $owner = is_siteadmin() ? (int) $USER->id : (int) get_admin()->id;

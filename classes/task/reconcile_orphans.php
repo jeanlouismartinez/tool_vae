@@ -22,6 +22,7 @@ use tool_vae\local\backup;
 use tool_vae\local\document_copies;
 use tool_vae\local\piece_manager;
 use tool_vae\local\purge;
+use tool_vae\local\spiece_manager;
 
 /**
  * Catches up with the purges that did not finish (T-78).
@@ -73,6 +74,8 @@ class reconcile_orphans extends \core\task\scheduled_task {
 
         // The supporting pieces (T-13) whose declaration or file is gone.
         $pieces = piece_manager::sweep_orphans();
+        // The files of the pieces of the work situations (lot 1b) that no piece points at, or of a removed one.
+        $pieces += spiece_manager::sweep_orphans();
 
         $backups = backup::discard_orphans() + document_copies::discard_orphans();
 

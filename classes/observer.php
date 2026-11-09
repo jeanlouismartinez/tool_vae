@@ -198,6 +198,11 @@ class observer {
         $DB->delete_records('tool_vae_referent', ['userid' => $candidateid]);
         $DB->execute('UPDATE {tool_vae_referent} SET createdby = 0 WHERE createdby = :userid', ['userid' => $candidateid]);
 
+        // The authorization to produce the archive of the structure: the lines about this manager go with the account, and who
+        // wrote a line leaves it (the line stays, without the name).
+        $DB->delete_records('tool_vae_booklet_auth', ['managerid' => $candidateid]);
+        $DB->execute('UPDATE {tool_vae_booklet_auth} SET grantedby = NULL WHERE grantedby = :userid', ['userid' => $candidateid]);
+
         // What this account sent to the reformulation aid (T-70) is NOT erased here: the core keeps the text and the answer in its
         // own tables, and the deletion request Moodle files at each deletion of an account empties them once a person approves
         // it. One door for everything the core keeps, decided on 27 October 2026 (tests/ai_erasure_left_to_moodle_test.php).
